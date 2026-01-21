@@ -1,0 +1,18 @@
+# Python
+**/__pycache__/
+**/*.py[cod]
+**/venv/
+**/.env
+**/debug_*.html
+
+# Flutter / Dart
+**/.dart_tool/
+**/.flutter-plugins
+**/.flutter-plugins-dependencies
+**/build/
+**/.pub-cache/
+**/.pub/
+
+# IDE
+**/.vscode/
+.DS_Store

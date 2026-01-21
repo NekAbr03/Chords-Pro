@@ -1,0 +1,20 @@
+# Python - временные файлы компиляции
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Виртуальное окружение (обязательно исключаем, оно весит много)
+venv/
+env/
+.env
+
+# Файлы настроек VS Code
+.vscode/
+
+# Системные файлы
+.DS_Store
+thumbs.db
+debug_last_html.html
+debug_mc_fail.html
+*.html
+*.log

@@ -16,8 +16,8 @@ class AppConfig {
   static const String serverIp = '192.168.0.17'; // Твой IP
 
   static String get baseUrl {
-    if (kIsWeb) return 'http://localhost:8000';
-    return 'http://$serverIp:8000';
+    // Твой новый адрес на Render (обязательно HTTPS)
+    return 'https://chords-pro.onrender.com';
   }
 }
 
@@ -163,6 +163,7 @@ class MusicChordsApp extends StatelessWidget {
             );
 
         return MaterialApp(
+          title: 'Chords Pro',
           debugShowCheckedModeBanner: false,
           themeMode: ThemeMode.system,
           theme: ThemeData(

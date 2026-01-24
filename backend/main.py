@@ -29,6 +29,10 @@ def get_parser_method(url: str):
     else:
         return None
 
+@app.get("/health")
+async def health_check():
+    return {"status": "ok"}
+
 @app.get("/")
 def read_root():
     return {"status": "running"}

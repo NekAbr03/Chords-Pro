@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'dart:convert';
-import 'dart:io'; // Для определения языка
-import 'package:flutter/foundation.dart';
+import 'dart:io'; // Для определения языка и платформы
+import 'dart:ui'; // Для ImageFilter (BackdropFilter)
+import 'package:flutter/foundation.dart'; // Для kIsWeb
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
@@ -8,22 +10,18 @@ import 'package:dynamic_color/dynamic_color.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-// ============================================================================
-// 0. CONFIG & SERVICES
-// ============================================================================
+// ... (AppConfig, FavoritesService, Models - БЕЗ ИЗМЕНЕНИЙ) ...
+// ... (Вставь сюда AppConfig, FavoritesService, SongLine, ChordData, MusicTheory из твоего кода) ...
 
 class AppConfig {
-  static const String serverIp = '192.168.0.17'; // Твой IP
-
+  static const String serverIp = '192.168.0.17';
   static String get baseUrl {
-    // Твой новый адрес на Render (обязательно HTTPS)
     return 'https://chords-pro.onrender.com';
   }
 }
 
 class FavoritesService {
   static const String _key = 'favorites_songs';
-
   static Future<List<Map<String, dynamic>>> getFavorites() async {
     final prefs = await SharedPreferences.getInstance();
     final List<String> rawList = prefs.getStringList(_key) ?? [];
@@ -38,7 +36,6 @@ class FavoritesService {
       final map = jsonDecode(e);
       return map['url'] == targetUrl;
     });
-
     if (existingIndex != -1) {
       rawList.removeAt(existingIndex);
     } else {
@@ -56,10 +53,6 @@ class FavoritesService {
     });
   }
 }
-
-// ============================================================================
-// 1. MODELS & UTILS
-// ============================================================================
 
 class SongLine {
   final String original;
@@ -103,15 +96,13 @@ class MusicTheory {
     'Cb': 'B',
     'Fb': 'E',
   };
-
   static String transposeChord(String chord, int semitones) {
     if (semitones == 0) return chord;
-    if (chord.contains('/')) {
+    if (chord.contains('/'))
       return chord
           .split('/')
           .map((part) => transposeChord(part, semitones))
           .join('/');
-    }
     final match = RegExp(r'^([A-G][#b]?)(.*)$').firstMatch(chord);
     if (match == null) return chord;
     String root = match.group(1)!;
@@ -122,6 +113,183 @@ class MusicTheory {
     int newIndex = (index + semitones) % 12;
     if (newIndex < 0) newIndex += 12;
     return _notes[newIndex] + suffix;
+  }
+}
+
+// ============================================================================
+// WIDGET: ADAPTIVE SONG CARD (NEW)
+// ============================================================================
+
+class AdaptiveSongCard extends StatelessWidget {
+  final String title;
+  final String artist;
+  final String url;
+  final VoidCallback onTap;
+
+  const AdaptiveSongCard({
+    super.key,
+    required this.title,
+    required this.artist,
+    required this.url,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final bool isDark = theme.brightness == Brightness.dark;
+
+    // --- 1. ANDROID (Material Design 3 - Без изменений) ---
+    if (!kIsWeb && Platform.isAndroid) {
+      return Card(
+        elevation: 0,
+        color: theme.colorScheme.surfaceContainerLow,
+        margin: const EdgeInsets.only(bottom: 8),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(16),
+          child: _buildContent(theme),
+        ),
+      );
+    }
+
+    // --- 2. IOS NATIVE (UiKitView + Blur) ---
+    if (!kIsWeb && Platform.isIOS) {
+      return Container(
+        height: 80, // Фиксированная высота для iOS карточки
+        margin: const EdgeInsets.only(bottom: 12),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(20),
+          child: Stack(
+            children: [
+              // Нативное стекло
+              const UiKitView(viewType: 'liquid-glass-view'),
+              // Контент с эффектом нажатия
+              Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: onTap,
+                  child: Center(child: _buildContent(theme)),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // --- 3. WEB (Flutter Liquid Glass Simulation) ---
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: isDark
+                ? Colors.black.withOpacity(0.3)
+                : Colors.black.withOpacity(0.05),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: Stack(
+          children: [
+            // Размытие фона
+            BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 20.0, sigmaY: 20.0),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? Colors.black.withOpacity(0.2)
+                      : Colors.white.withOpacity(0.2), // Полупрозрачная заливка
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: Colors.white.withOpacity(
+                      0.2,
+                    ), // Тонкая обводка (Frost)
+                    width: 1.0,
+                  ),
+                ),
+              ),
+            ),
+            // Контент
+            Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: onTap,
+                borderRadius: BorderRadius.circular(20),
+                child: _buildContent(theme),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildContent(ThemeData theme) {
+    return Padding(
+      padding: const EdgeInsets.all(12.0),
+      child: Row(
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: theme.colorScheme.secondaryContainer.withOpacity(
+                0.8,
+              ), // Прозрачность для стекла
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(
+              Icons.music_note,
+              color: theme.colorScheme.onSecondaryContainer,
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  title,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  artist,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+          const Icon(Icons.chevron_right, color: Colors.grey),
+        ],
+      ),
+    );
   }
 }
 
@@ -147,6 +315,16 @@ class MusicChordsApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const pastelPurple = Color(0xFFD0BCFF);
+
+    // Цвет фона: Для Android дефолт, для iOS/Web - светло-серый (чтобы стекло работало)
+    final bool useGlassBackground = kIsWeb || (!kIsWeb && Platform.isIOS);
+    final lightBg = useGlassBackground
+        ? const Color(0xFFF2F2F7)
+        : const Color(0xFFFDFDFD);
+    final darkBg = useGlassBackground
+        ? const Color(0xFF000000)
+        : const Color(0xFF0F0F0F);
+
     return DynamicColorBuilder(
       builder: (lightDynamic, darkDynamic) {
         ColorScheme lightScheme =
@@ -170,7 +348,7 @@ class MusicChordsApp extends StatelessWidget {
             useMaterial3: true,
             brightness: Brightness.light,
             colorScheme: lightScheme,
-            scaffoldBackgroundColor: const Color(0xFFFDFDFD),
+            scaffoldBackgroundColor: lightBg, // АДАПТИВНЫЙ ФОН
             textTheme: GoogleFonts.robotoTextTheme(ThemeData.light().textTheme),
             pageTransitionsTheme: const PageTransitionsTheme(
               builders: {
@@ -183,7 +361,7 @@ class MusicChordsApp extends StatelessWidget {
             useMaterial3: true,
             brightness: Brightness.dark,
             colorScheme: darkScheme,
-            scaffoldBackgroundColor: const Color(0xFF0F0F0F),
+            scaffoldBackgroundColor: darkBg, // АДАПТИВНЫЙ ФОН
             textTheme: GoogleFonts.robotoTextTheme(ThemeData.dark().textTheme),
             pageTransitionsTheme: const PageTransitionsTheme(
               builders: {
@@ -280,72 +458,24 @@ class _HomeTabState extends State<HomeTab> {
             );
           }
           final item = _topSongs[index - 1];
-          return Card(
-            elevation: 0,
-            color: theme.colorScheme.surfaceContainerLow,
-            margin: const EdgeInsets.only(bottom: 8),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: InkWell(
-              borderRadius: BorderRadius.circular(16),
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => SongViewScreen(
-                      title: item['title'] ?? 'Без названия',
-                      artist: item['artist'] ?? 'Неизвестен',
-                      url: item['url'],
-                    ),
+
+          // ИСПОЛЬЗУЕМ НОВУЮ АДАПТИВНУЮ КАРТОЧКУ
+          return AdaptiveSongCard(
+            title: item['title'] ?? 'Без названия',
+            artist: item['artist'] ?? 'Неизвестен',
+            url: item['url'],
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => SongViewScreen(
+                    title: item['title'] ?? 'Без названия',
+                    artist: item['artist'] ?? 'Неизвестен',
+                    url: item['url'],
                   ),
-                );
-              },
-              child: Padding(
-                padding: const EdgeInsets.all(12.0),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 48,
-                      height: 48,
-                      decoration: BoxDecoration(
-                        color: theme.colorScheme.secondaryContainer,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Icon(
-                        Icons.whatshot,
-                        color: theme.colorScheme.onSecondaryContainer,
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            item['title'] ?? 'Без названия',
-                            style: theme.textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.bold,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          Text(
-                            item['artist'] ?? 'Неизвестен',
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              color: theme.colorScheme.onSurfaceVariant,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
-                      ),
-                    ),
-                    const Icon(Icons.chevron_right, color: Colors.grey),
-                  ],
                 ),
-              ),
-            ),
+              );
+            },
           );
         },
       ),
@@ -444,20 +574,6 @@ class _SearchScreenState extends State<SearchScreen> {
     }
   }
 
-  Color _getSourceColor(String label, ColorScheme scheme) {
-    if (label == 'UG') return Colors.amber;
-    if (label == 'MC') return Colors.blueAccent;
-    return scheme.primary;
-  }
-
-  String _getSourceLabel(dynamic item) {
-    if (item['source_label'] != null) return item['source_label'];
-    final url = item['url'] as String? ?? '';
-    if (url.contains('ultimate-guitar')) return 'UG';
-    if (url.contains('mychords')) return 'MC';
-    return 'WEB';
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -475,107 +591,21 @@ class _SearchScreenState extends State<SearchScreen> {
           itemCount: _searchResults.length,
           itemBuilder: (context, index) {
             final item = _searchResults[index];
-            final sourceLabel = _getSourceLabel(item);
-
-            return FutureBuilder<bool>(
-              future: FavoritesService.isFavorite(item['url']),
-              builder: (context, snapshot) {
-                final isFav = snapshot.data ?? false;
-                return Card(
-                  elevation: 0,
-                  color: theme.colorScheme.surfaceContainerLow,
-                  margin: const EdgeInsets.only(bottom: 8),
-                  child: InkWell(
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => SongViewScreen(
-                            title: item['title'] ?? 'Без названия',
-                            artist: item['artist'] ?? 'Неизвестен',
-                            url: item['url'],
-                          ),
-                        ),
-                      ).then((_) => setState(() {}));
-                    },
-                    borderRadius: BorderRadius.circular(12),
-                    child: Padding(
-                      padding: const EdgeInsets.all(12.0),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 48,
-                            height: 48,
-                            decoration: BoxDecoration(
-                              color: theme.colorScheme.primaryContainer,
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Icon(
-                              Icons.music_note,
-                              color: theme.colorScheme.onPrimaryContainer,
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  item['title'] ?? 'Без названия',
-                                  style: theme.textTheme.titleMedium?.copyWith(
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  item['artist'] ?? 'Неизвестен',
-                                  style: theme.textTheme.bodyMedium?.copyWith(
-                                    color: theme.colorScheme.onSurfaceVariant,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ],
-                            ),
-                          ),
-                          if (isFav)
-                            Icon(
-                              Icons.favorite,
-                              size: 16,
-                              color: theme.colorScheme.primary,
-                            ),
-                          const SizedBox(width: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 4,
-                            ),
-                            decoration: BoxDecoration(
-                              color: _getSourceColor(
-                                sourceLabel,
-                                theme.colorScheme,
-                              ).withOpacity(0.2),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Text(
-                              sourceLabel,
-                              style: TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                                color: _getSourceColor(
-                                  sourceLabel,
-                                  theme.colorScheme,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
+            return AdaptiveSongCard(
+              title: item['title'] ?? 'Без названия',
+              artist: item['artist'] ?? 'Неизвестен',
+              url: item['url'],
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => SongViewScreen(
+                      title: item['title'] ?? 'Без названия',
+                      artist: item['artist'] ?? 'Неизвестен',
+                      url: item['url'],
                     ),
                   ),
-                );
+                ).then((_) => setState(() {}));
               },
             );
           },
@@ -616,7 +646,6 @@ class _SearchScreenState extends State<SearchScreen> {
           ],
         );
       }
-
       return const Center(child: Text("Введите запрос для поиска"));
     }
 
@@ -660,12 +689,13 @@ class _SearchScreenState extends State<SearchScreen> {
               ],
               onSubmitted: _performSearch,
               onChanged: (text) {
-                if (text.isEmpty)
+                if (text.isEmpty) {
                   setState(() {
                     _searchResults = [];
                     _error = null;
                     _nothingFound = false;
                   });
+                }
               },
               elevation: WidgetStateProperty.all(0),
               backgroundColor: WidgetStateProperty.all(
@@ -680,6 +710,8 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 }
 
+// ... (MainScreen, SongViewScreen БЕЗ ИЗМЕНЕНИЙ ДО SongViewScreenState) ...
+
 // ============================================================================
 // 5. MAIN SCREEN
 // ============================================================================
@@ -692,8 +724,7 @@ class MainScreen extends StatefulWidget {
 }
 
 class _MainScreenState extends State<MainScreen> {
-  int _selectedIndex = 1;
-  final PageController _pageController = PageController(initialPage: 1);
+  int _selectedIndex = 0;
 
   final ScrollController _homeScrollController = ScrollController();
   final ScrollController _searchScrollController = ScrollController();
@@ -707,38 +738,35 @@ class _MainScreenState extends State<MainScreen> {
     if (_selectedIndex == index) {
       switch (index) {
         case 0:
-          if (_homeScrollController.hasClients)
+          if (_homeScrollController.hasClients) {
             _homeScrollController.animateTo(
               0,
               duration: const Duration(milliseconds: 300),
               curve: Curves.easeInOut,
             );
+          }
           break;
         case 1:
-          if (_searchScrollController.hasClients)
+          if (_searchScrollController.hasClients) {
             _searchScrollController.animateTo(
               0,
               duration: const Duration(milliseconds: 300),
               curve: Curves.easeInOut,
             );
+          }
           break;
         case 2:
-          if (_libraryScrollController.hasClients)
+          if (_libraryScrollController.hasClients) {
             _libraryScrollController.animateTo(
               0,
               duration: const Duration(milliseconds: 300),
               curve: Curves.easeInOut,
             );
+          }
           break;
       }
     } else {
       setState(() => _selectedIndex = index);
-      // Плавная анимация
-      _pageController.animateToPage(
-        index,
-        duration: const Duration(milliseconds: 300), // Длительность 0.3 сек
-        curve: Curves.easeInOut, // Плавное ускорение и замедление
-      );
     }
   }
 
@@ -767,72 +795,22 @@ class _MainScreenState extends State<MainScreen> {
             itemCount: songs.length,
             itemBuilder: (context, index) {
               final song = songs[index];
-              return Card(
-                elevation: 0,
-                color: Theme.of(context).colorScheme.surfaceContainerLow,
-                margin: const EdgeInsets.only(bottom: 12),
-                child: InkWell(
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => SongViewScreen(
-                          title: song["title"] ?? "Без названия",
-                          artist: song["artist"] ?? "Неизвестен",
-                          url: song["url"],
-                        ),
+              return AdaptiveSongCard(
+                title: song["title"] ?? "Без названия",
+                artist: song["artist"] ?? "Неизвестен",
+                url: song["url"],
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => SongViewScreen(
+                        title: song["title"] ?? "Без названия",
+                        artist: song["artist"] ?? "Неизвестен",
+                        url: song["url"],
                       ),
-                    ).then((_) => setState(() {}));
-                  },
-                  borderRadius: BorderRadius.circular(12),
-                  child: Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 56,
-                          height: 56,
-                          decoration: BoxDecoration(
-                            color: Theme.of(
-                              context,
-                            ).colorScheme.tertiaryContainer,
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          child: Icon(
-                            Icons.favorite,
-                            color: Theme.of(
-                              context,
-                            ).colorScheme.onTertiaryContainer,
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                song["title"] ?? "",
-                                style: Theme.of(context).textTheme.titleMedium
-                                    ?.copyWith(fontWeight: FontWeight.bold),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                song["artist"] ?? "",
-                                style: Theme.of(context).textTheme.bodyMedium
-                                    ?.copyWith(
-                                      color: Theme.of(
-                                        context,
-                                      ).colorScheme.onSurfaceVariant,
-                                    ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const Icon(Icons.chevron_right, color: Colors.grey),
-                      ],
                     ),
-                  ),
-                ),
+                  ).then((_) => setState(() {}));
+                },
               );
             },
           );
@@ -854,14 +832,21 @@ class _MainScreenState extends State<MainScreen> {
         ),
         centerTitle: false,
       ),
-      body: PageView(
-        controller: _pageController,
-        physics: const NeverScrollableScrollPhysics(),
-        children: [
-          HomeTab(onChangeTab: _onItemTapped),
-          SearchScreen(scrollController: _searchScrollController),
-          buildLibraryList(),
-        ],
+      body: SafeArea(
+        child: IndexedStack(
+          index: _selectedIndex,
+          children: [
+            HomeTab(onChangeTab: _onItemTapped),
+            IgnorePointer(
+              ignoring: _selectedIndex != 1,
+              child: SearchScreen(scrollController: _searchScrollController),
+            ),
+            IgnorePointer(
+              ignoring: _selectedIndex != 2,
+              child: buildLibraryList(),
+            ),
+          ],
+        ),
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _selectedIndex,
@@ -916,10 +901,10 @@ class _SongViewScreenState extends State<SongViewScreen> {
 
   // PANEL STATE
   final ScrollController _chordScrollController = ScrollController();
-  bool _isPanelExpanded = true;
-  double _panelHeight = 140.0;
-  final double _maxPanelHeight = 140.0;
-  final double _minPanelHeight = 0.0;
+  bool _isPanelExpanded = false;
+  static const double _panelCollapsedSize = 56.0;
+  static const double _panelMarginCollapsed = 16.0;
+  static const double _panelExpandedHeight = 200.0;
 
   bool _isFavorite = false;
 
@@ -946,14 +931,8 @@ class _SongViewScreenState extends State<SongViewScreen> {
     _checkFavorite();
   }
 
+  // --- ФИКС БАГА СО СКРОЛЛОМ ---
   void _scrollToChord(String rawChordName) {
-    if (!_isPanelExpanded) {
-      setState(() {
-        _isPanelExpanded = true;
-        _panelHeight = _maxPanelHeight;
-      });
-    }
-
     if (_rawUniqueChords.isEmpty) return;
     final index = _rawUniqueChords.indexOf(rawChordName);
 
@@ -963,16 +942,27 @@ class _SongViewScreenState extends State<SongViewScreen> {
       final targetOffset =
           (index * itemWidth) - (screenWidth / 2) + (itemWidth / 2);
 
-      Future.delayed(const Duration(milliseconds: 100), () {
-        if (_chordScrollController.hasClients) {
-          final maxScroll = _chordScrollController.position.maxScrollExtent;
-          _chordScrollController.animateTo(
-            targetOffset.clamp(0.0, maxScroll),
-            duration: const Duration(milliseconds: 300),
-            curve: Curves.easeInOut,
-          );
-        }
-      });
+      // Проверяем наличие клиентов. Если панель только открывается, клиентов может не быть.
+      if (_chordScrollController.hasClients) {
+        final maxScroll = _chordScrollController.position.maxScrollExtent;
+        _chordScrollController.animateTo(
+          targetOffset.clamp(0.0, maxScroll),
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeInOut,
+        );
+      } else {
+        // Если клиентов нет (панель в процессе открытия), пробуем еще раз чуть позже
+        Future.delayed(const Duration(milliseconds: 50), () {
+          if (mounted && _chordScrollController.hasClients) {
+            final maxScroll = _chordScrollController.position.maxScrollExtent;
+            _chordScrollController.animateTo(
+              targetOffset.clamp(0.0, maxScroll),
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeInOut,
+            );
+          }
+        });
+      }
     }
   }
 
@@ -987,39 +977,35 @@ class _SongViewScreenState extends State<SongViewScreen> {
     return 'x${hash % 5}${hash % 4}0${hash % 3}${hash % 2}';
   }
 
-  void _onVerticalDragUpdate(DragUpdateDetails details) {
-    setState(() {
-      _panelHeight -= details.delta.dy;
-      _panelHeight = _panelHeight.clamp(_minPanelHeight, _maxPanelHeight);
-    });
-  }
-
-  void _onVerticalDragEnd(DragEndDetails details) {
-    if (_panelHeight > _maxPanelHeight / 2) {
-      setState(() {
-        _panelHeight = _maxPanelHeight;
-        _isPanelExpanded = true;
-      });
-    } else {
-      setState(() {
-        _panelHeight = _minPanelHeight;
-        _isPanelExpanded = false;
-      });
+  void _onPanelDragUpdate(DragUpdateDetails details) {
+    if (_isPanelExpanded && details.delta.dy > 2) {
+      setState(() => _isPanelExpanded = false);
     }
   }
 
   void _togglePanel() {
-    setState(() {
-      _isPanelExpanded = !_isPanelExpanded;
-      _panelHeight = _isPanelExpanded ? _maxPanelHeight : _minPanelHeight;
+    setState(() => _isPanelExpanded = !_isPanelExpanded);
+  }
+
+  void _onChordTapInternal(String rawChordName) {
+    // 1. Открываем панель
+    setState(() => _isPanelExpanded = true);
+
+    // 2. Ждем завершения анимации открытия (300мс) + небольшой буфер
+    // Важно: AnimatedContainer занимает 300мс.
+    Future.delayed(const Duration(milliseconds: 350), () {
+      if (mounted) {
+        _scrollToChord(rawChordName);
+      }
     });
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    const double handleHeight = 24.0;
-    final double textBottomPadding = _panelHeight + handleHeight + 20;
+    final screenWidth = MediaQuery.of(context).size.width;
+    final screenHeight = MediaQuery.of(context).size.height;
+    final adaptiveHeight = (screenHeight * 0.25).clamp(140.0, 180.0);
 
     return Scaffold(
       extendBodyBehindAppBar: false,
@@ -1028,7 +1014,6 @@ class _SongViewScreenState extends State<SongViewScreen> {
         backgroundColor: theme.colorScheme.surface,
         elevation: 0,
         centerTitle: true,
-        // Удаляем ведущую иконку, чтобы системный жест назад работал корректно
         title: Column(
           children: [
             Text(widget.title, style: theme.textTheme.titleMedium),
@@ -1047,14 +1032,14 @@ class _SongViewScreenState extends State<SongViewScreen> {
           ),
         ],
       ),
-
-      body: Column(
+      body: Stack(
         children: [
-          Expanded(
+          Positioned.fill(
+            bottom: _isPanelExpanded ? _panelExpandedHeight : 0,
             child: LyricsRenderArea(
               url: widget.url,
               transposeLevel: _transposeLevel,
-              bottomPadding: textBottomPadding,
+              bottomPadding: _isPanelExpanded ? _panelExpandedHeight + 20 : 0,
               onTransposeChange: (newLevel) =>
                   setState(() => _transposeLevel = newLevel),
               onChordsLoaded: (chords) {
@@ -1062,107 +1047,129 @@ class _SongViewScreenState extends State<SongViewScreen> {
                   setState(() => _rawUniqueChords = chords);
                 }
               },
-              onChordTap: _scrollToChord,
+              onChordTap: _onChordTapInternal, // Используем исправленный метод
             ),
           ),
-
-          Divider(height: 1, color: theme.colorScheme.outlineVariant),
-
-          GestureDetector(
-            onVerticalDragUpdate: _onVerticalDragUpdate,
-            onVerticalDragEnd: _onVerticalDragEnd,
-            onTap: _togglePanel,
-            child: Container(
-              color: theme.colorScheme.surfaceContainer,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    height: handleHeight,
-                    width: double.infinity,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.surfaceContainer,
-                      border: Border(
-                        top: BorderSide(
-                          color: theme.colorScheme.outlineVariant.withOpacity(
-                            0.5,
-                          ),
-                        ),
-                      ),
+          Align(
+            alignment: _isPanelExpanded
+                ? Alignment.bottomCenter
+                : Alignment.bottomRight,
+            child: GestureDetector(
+              onVerticalDragUpdate: _onPanelDragUpdate,
+              onTap: _isPanelExpanded ? null : _togglePanel,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeOutCubic,
+                width: _isPanelExpanded ? screenWidth : _panelCollapsedSize,
+                height: _isPanelExpanded ? adaptiveHeight : _panelCollapsedSize,
+                margin: EdgeInsets.only(
+                  right: _isPanelExpanded ? 0 : _panelMarginCollapsed,
+                  bottom: _isPanelExpanded ? 0 : _panelMarginCollapsed,
+                ),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.secondaryContainer,
+                  borderRadius: _isPanelExpanded
+                      ? const BorderRadius.vertical(top: Radius.circular(24))
+                      : BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.15),
+                      blurRadius: 8,
+                      offset: const Offset(0, -2),
                     ),
-                    child: Container(
-                      width: 32,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: theme.colorScheme.onSurfaceVariant.withOpacity(
-                          0.4,
-                        ),
-                        borderRadius: BorderRadius.circular(2),
-                      ),
+                  ],
+                ),
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    // ВАЖНО: Используем Offstage вместо Visibility для сохранения состояния скролла
+                    // и чтобы ListView был "жив" даже когда невидим (но не отрисовывался)
+                    Offstage(
+                      offstage: !_isPanelExpanded,
+                      child: _buildExpandedPanel(theme),
                     ),
-                  ),
-
-                  AnimatedContainer(
-                    duration: const Duration(milliseconds: 250),
-                    curve: Curves.easeOutCubic,
-                    height: _panelHeight,
-                    child: SingleChildScrollView(
-                      physics: const NeverScrollableScrollPhysics(),
-                      child: SizedBox(
-                        height: _maxPanelHeight,
-                        child: _rawUniqueChords.isEmpty
-                            ? Center(
-                                child: Text(
-                                  "Загрузка...",
-                                  style: theme.textTheme.bodyMedium,
-                                ),
-                              )
-                            : ListView.separated(
-                                controller: _chordScrollController,
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                  vertical: 12,
-                                ),
-                                scrollDirection: Axis.horizontal,
-                                itemCount: _rawUniqueChords.length,
-                                separatorBuilder: (_, __) =>
-                                    const SizedBox(width: 16),
-                                itemBuilder: (context, index) {
-                                  final rawName = _rawUniqueChords[index];
-                                  final displayName =
-                                      MusicTheory.transposeChord(
-                                        rawName,
-                                        _transposeLevel,
-                                      );
-                                  final positions = _getMockPositions(
-                                    displayName,
-                                  );
-
-                                  return Container(
-                                    padding: const EdgeInsets.all(8),
-                                    decoration: BoxDecoration(
-                                      color: theme.brightness == Brightness.dark
-                                          ? Colors.white.withOpacity(0.05)
-                                          : Colors.black.withOpacity(0.05),
-                                      borderRadius: BorderRadius.circular(16),
-                                    ),
-                                    child: GuitarChordWidget(
-                                      chord: ChordData(displayName, positions),
-                                      color: theme.colorScheme.onSurface,
-                                    ),
-                                  );
-                                },
-                              ),
-                      ),
+                    Visibility(
+                      visible: !_isPanelExpanded,
+                      child: _buildCollapsedButton(),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildCollapsedButton() {
+    return Center(
+      child: Icon(
+        Icons.music_note_outlined,
+        size: 28,
+        color: Theme.of(context).colorScheme.onSecondaryContainer,
+      ),
+    );
+  }
+
+  Widget _buildExpandedPanel(ThemeData theme) {
+    return Column(
+      children: [
+        Container(
+          height: 24,
+          alignment: Alignment.center,
+          child: Container(
+            width: 48,
+            height: 4,
+            decoration: BoxDecoration(
+              color: theme.colorScheme.onSurfaceVariant.withOpacity(0.4),
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+        ),
+        Expanded(
+          child: _rawUniqueChords.isEmpty
+              ? Center(
+                  child: Text('Загрузка...', style: theme.textTheme.bodyMedium),
+                )
+              : Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                  child: ListView.separated(
+                    controller: _chordScrollController,
+                    scrollDirection: Axis.horizontal,
+                    itemCount: _rawUniqueChords.length,
+                    separatorBuilder: (_, __) => const SizedBox(width: 12),
+                    itemBuilder: (context, index) {
+                      final rawName = _rawUniqueChords[index];
+                      final displayName = MusicTheory.transposeChord(
+                        rawName,
+                        _transposeLevel,
+                      );
+                      final positions = _getMockPositions(displayName);
+                      return GestureDetector(
+                        onTap: () => _scrollToChord(rawName),
+                        child: Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: theme.brightness == Brightness.dark
+                                ? Colors.white.withOpacity(0.08)
+                                : Colors.black.withOpacity(0.08),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: GuitarChordWidget(
+                            chord: ChordData(displayName, positions),
+                            color: theme.colorScheme.onSecondaryContainer,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+        ),
+      ],
     );
   }
 }
@@ -1195,10 +1202,13 @@ class LyricsRenderArea extends StatefulWidget {
 
 class _LyricsRenderAreaState extends State<LyricsRenderArea> {
   bool _showRomaji = false;
-  bool _showChords = true;
+  final bool _showChords = true;
   List<SongLine> _parsedLines = [];
   bool _isLoading = true;
   bool _isError = false;
+  bool _isSlowLoading = false;
+  String? _errorMessage;
+  Timer? _loadingTimer;
 
   @override
   void initState() {
@@ -1206,24 +1216,49 @@ class _LyricsRenderAreaState extends State<LyricsRenderArea> {
     _loadData();
   }
 
+  @override
+  void dispose() {
+    _loadingTimer?.cancel();
+    super.dispose();
+  }
+
   Future<void> _loadData() async {
     if (widget.url == null) {
       setState(() {
         _isLoading = false;
         _isError = true;
+        _errorMessage = 'Песня не найдена';
       });
       return;
     }
+
     setState(() {
       _isLoading = true;
       _isError = false;
+      _isSlowLoading = false;
+      _errorMessage = null;
+    });
+
+    // Запускаем таймер на 3 секунды для "умной" индикации
+    _loadingTimer = Timer(const Duration(seconds: 3), () {
+      if (mounted && _isLoading) {
+        setState(() => _isSlowLoading = true);
+      }
     });
 
     try {
       final Uri uri = Uri.parse(
         '${AppConfig.baseUrl}/parse?url=${widget.url!}',
       );
-      final response = await http.get(uri);
+
+      final response = await http
+          .get(uri)
+          .timeout(
+            const Duration(seconds: 60),
+            onTimeout: () => throw TimeoutException('Сервер не отвечает'),
+          );
+
+      _loadingTimer?.cancel();
 
       if (response.statusCode == 200) {
         final Map<String, dynamic> decodedMap = jsonDecode(
@@ -1251,23 +1286,64 @@ class _LyricsRenderAreaState extends State<LyricsRenderArea> {
           widget.onChordsLoaded?.call(orderedChords);
         });
 
-        setState(() {
-          _parsedLines = linesList
-              .map((json) => SongLine.fromJson(json))
-              .toList();
-          _isLoading = false;
-        });
+        if (mounted) {
+          setState(() {
+            _parsedLines = linesList
+                .map((json) => SongLine.fromJson(json))
+                .toList();
+            _isLoading = false;
+            _isSlowLoading = false;
+          });
+        }
+      } else if (response.statusCode == 404) {
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+            _isError = true;
+            _errorMessage = 'Песня не найдена';
+            _isSlowLoading = false;
+          });
+        }
       } else {
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+            _isError = true;
+            _errorMessage = 'Ошибка загрузки: ${response.statusCode}';
+            _isSlowLoading = false;
+          });
+        }
+      }
+    } on SocketException catch (_) {
+      _loadingTimer?.cancel();
+      if (mounted) {
         setState(() {
           _isLoading = false;
           _isError = true;
+          _errorMessage = 'Нет подключения к интернету';
+          _isSlowLoading = false;
+        });
+      }
+    } on TimeoutException catch (_) {
+      _loadingTimer?.cancel();
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _isError = true;
+          _errorMessage = 'Сервер не отвечает';
+          _isSlowLoading = false;
         });
       }
     } catch (e) {
-      setState(() {
-        _isLoading = false;
-        _isError = true;
-      });
+      _loadingTimer?.cancel();
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _isError = true;
+          _errorMessage = 'Ошибка загрузки';
+          _isSlowLoading = false;
+        });
+      }
     }
   }
 
@@ -1275,9 +1351,36 @@ class _LyricsRenderAreaState extends State<LyricsRenderArea> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    // 1. Сначала обрабатываем состояния загрузки и ошибки
-    if (_isLoading) return const Center(child: CircularProgressIndicator());
+    // 1. Обработка загрузки с "умной" индикацией
+    if (_isLoading) {
+      if (_isSlowLoading) {
+        return Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const CircularProgressIndicator(),
+              const SizedBox(height: 24),
+              Text(
+                'Сервер просыпается...',
+                style: theme.textTheme.titleMedium,
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Это может занять до 50 секунд (первый запуск)',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        );
+      }
+      return const Center(child: CircularProgressIndicator());
+    }
 
+    // 2. Обработка ошибок с подробными сообщениями
     if (_isError) {
       return Center(
         child: Column(
@@ -1289,9 +1392,13 @@ class _LyricsRenderAreaState extends State<LyricsRenderArea> {
               color: theme.colorScheme.error,
             ),
             const SizedBox(height: 16),
-            const Text("Ошибка загрузки"),
+            Text(
+              _errorMessage ?? 'Ошибка загрузки',
+              style: theme.textTheme.titleMedium,
+              textAlign: TextAlign.center,
+            ),
             const SizedBox(height: 16),
-            FilledButton(onPressed: _loadData, child: const Text("Повторить")),
+            FilledButton(onPressed: _loadData, child: const Text('Повторить')),
           ],
         ),
       );
@@ -1315,7 +1422,7 @@ class _LyricsRenderAreaState extends State<LyricsRenderArea> {
       child: ListView.separated(
         padding: EdgeInsets.fromLTRB(16, 16, 16, widget.bottomPadding),
         itemCount: _parsedLines.length + 1,
-        separatorBuilder: (_, __) => const SizedBox(height: 12),
+        separatorBuilder: (_, _) => const SizedBox(height: 12),
         itemBuilder: (context, index) {
           // HEADER (Кнопки управления)
           if (index == 0) {
@@ -1333,6 +1440,7 @@ class _LyricsRenderAreaState extends State<LyricsRenderArea> {
                       color: theme.colorScheme.surfaceContainerHighest,
                       borderRadius: BorderRadius.circular(50),
                       border: Border.all(
+                        // ignore: deprecated_member_use
                         color: theme.colorScheme.outline.withOpacity(0.2),
                       ),
                     ),
@@ -1527,31 +1635,35 @@ class GuitarChordWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        SizedBox(
-          width: 50,
-          height: 65,
-          child: CustomPaint(
-            painter: _ChordPainter(positions: chord.positions, color: color),
-          ),
-        ),
-        const SizedBox(height: 4),
-        Flexible(
-          child: Text(
-            chord.name,
-            style: GoogleFonts.roboto(
-              color: color,
-              fontWeight: FontWeight.bold,
-              fontSize: 13,
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      alignment: Alignment.center,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          SizedBox(
+            width: 50,
+            height: 65,
+            child: CustomPaint(
+              painter: _ChordPainter(positions: chord.positions, color: color),
             ),
-            textAlign: TextAlign.center,
-            overflow: TextOverflow.ellipsis,
           ),
-        ),
-      ],
+          const SizedBox(height: 4),
+          Flexible(
+            child: Text(
+              chord.name,
+              style: GoogleFonts.roboto(
+                color: color,
+                fontWeight: FontWeight.bold,
+                fontSize: 13,
+              ),
+              textAlign: TextAlign.center,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

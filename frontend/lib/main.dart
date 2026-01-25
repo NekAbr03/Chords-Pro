@@ -18,6 +18,61 @@ class AppConfig {
   static String get baseUrl {
     return 'https://chords-pro.onrender.com';
   }
+
+  /// Выполняет GET запрос с автоматическими повторными попытками
+  /// 1-я попытка: сразу
+  /// 2-я попытка: через 1 секунду
+  /// 3-я попытка: через 2 секунды
+  /// Если все попытки провалены, пробрасывает исключение
+  static Future<http.Response> getWithRetry(
+    String url, {
+    int maxAttempts = 3,
+  }) async {
+    final List<int> delaySeconds = [0, 1, 2];
+
+    for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        // Ожидаем перед попыткой (для 2-й и 3-й попыток)
+        if (attempt > 1) {
+          await Future.delayed(Duration(seconds: delaySeconds[attempt - 1]));
+        }
+
+        final Uri uri = Uri.parse(url);
+        final response = await http
+            .get(uri)
+            .timeout(
+              const Duration(seconds: 30),
+              onTimeout: () =>
+                  throw TimeoutException('Timeout при получении $url'),
+            );
+
+        // Если статус 200 - успех
+        if (response.statusCode == 200) {
+          return response;
+        }
+
+        // Если статус не 200, выводим ошибку и продолжаем попытки
+        debugPrint(
+          'getWithRetry попытка $attempt/$maxAttempts: статус ${response.statusCode} для $url',
+        );
+      } catch (e) {
+        // Выводим ошибку при исключении
+        debugPrint(
+          'getWithRetry попытка $attempt/$maxAttempts: исключение для $url - $e',
+        );
+
+        // Если это последняя попытка, пробрасываем исключение
+        if (attempt == maxAttempts) {
+          rethrow;
+        }
+      }
+    }
+
+    // Этот код не должен быть достигнут, но на случай
+    throw Exception(
+      'getWithRetry: все $maxAttempts попытки провалены для $url',
+    );
+  }
 }
 
 class FavoritesService {
@@ -401,17 +456,13 @@ class _HomeTabState extends State<HomeTab> {
 
   Future<void> _loadTopSongs() async {
     try {
-      final Uri uri = Uri.parse('${AppConfig.baseUrl}/top');
-      final response = await http.get(uri);
-      if (response.statusCode == 200) {
-        if (mounted) {
-          setState(() {
-            _topSongs = jsonDecode(utf8.decode(response.bodyBytes));
-            _isLoading = false;
-          });
-        }
-      } else {
-        throw Exception('Error');
+      final url = '${AppConfig.baseUrl}/top';
+      final response = await AppConfig.getWithRetry(url);
+      if (mounted) {
+        setState(() {
+          _topSongs = jsonDecode(utf8.decode(response.bodyBytes));
+          _isLoading = false;
+        });
       }
     } catch (e) {
       if (mounted) setState(() => _isLoading = false);
@@ -549,23 +600,15 @@ class _SearchScreenState extends State<SearchScreen> {
     });
 
     try {
-      final Uri uri = Uri.parse(
-        '${AppConfig.baseUrl}/search?q=${Uri.encodeComponent(query)}',
-      );
-      final response = await http.get(uri);
+      final url = '${AppConfig.baseUrl}/search?q=${Uri.encodeComponent(query)}';
+      final response = await AppConfig.getWithRetry(url);
 
-      if (response.statusCode == 200) {
-        final List<dynamic> results = jsonDecode(
-          utf8.decode(response.bodyBytes),
-        );
-        setState(() {
-          _searchResults = results;
-          _nothingFound = results.isEmpty;
-          _isSearching = false;
-        });
-      } else {
-        throw Exception('Error: ${response.statusCode}');
-      }
+      final List<dynamic> results = jsonDecode(utf8.decode(response.bodyBytes));
+      setState(() {
+        _searchResults = results;
+        _nothingFound = results.isEmpty;
+        _isSearching = false;
+      });
     } catch (e) {
       setState(() {
         _isSearching = false;
@@ -1247,72 +1290,47 @@ class _LyricsRenderAreaState extends State<LyricsRenderArea> {
     });
 
     try {
-      final Uri uri = Uri.parse(
-        '${AppConfig.baseUrl}/parse?url=${widget.url!}',
+      final url = '${AppConfig.baseUrl}/parse?url=${widget.url!}';
+      final response = await AppConfig.getWithRetry(url).timeout(
+        const Duration(seconds: 60),
+        onTimeout: () => throw TimeoutException('Сервер не отвечает'),
       );
-
-      final response = await http
-          .get(uri)
-          .timeout(
-            const Duration(seconds: 60),
-            onTimeout: () => throw TimeoutException('Сервер не отвечает'),
-          );
 
       _loadingTimer?.cancel();
 
-      if (response.statusCode == 200) {
-        final Map<String, dynamic> decodedMap = jsonDecode(
-          utf8.decode(response.bodyBytes),
-        );
-        final List<dynamic> linesList = decodedMap['lines'];
+      final Map<String, dynamic> decodedMap = jsonDecode(
+        utf8.decode(response.bodyBytes),
+      );
+      final List<dynamic> linesList = decodedMap['lines'];
 
-        final List<String> orderedChords = [];
-        final Set<String> seenChords = {};
-        final RegExp chordRegex = RegExp(r'\{([^}]+)\}');
+      final List<String> orderedChords = [];
+      final Set<String> seenChords = {};
+      final RegExp chordRegex = RegExp(r'\{([^}]+)\}');
 
-        for (var lineJson in linesList) {
-          String original = lineJson['original'] ?? '';
-          final matches = chordRegex.allMatches(original);
-          for (var match in matches) {
-            final chord = match.group(1);
-            if (chord != null && !seenChords.contains(chord)) {
-              seenChords.add(chord);
-              orderedChords.add(chord);
-            }
+      for (var lineJson in linesList) {
+        String original = lineJson['original'] ?? '';
+        final matches = chordRegex.allMatches(original);
+        for (var match in matches) {
+          final chord = match.group(1);
+          if (chord != null && !seenChords.contains(chord)) {
+            seenChords.add(chord);
+            orderedChords.add(chord);
           }
         }
+      }
 
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          widget.onChordsLoaded?.call(orderedChords);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        widget.onChordsLoaded?.call(orderedChords);
+      });
+
+      if (mounted) {
+        setState(() {
+          _parsedLines = linesList
+              .map((json) => SongLine.fromJson(json))
+              .toList();
+          _isLoading = false;
+          _isSlowLoading = false;
         });
-
-        if (mounted) {
-          setState(() {
-            _parsedLines = linesList
-                .map((json) => SongLine.fromJson(json))
-                .toList();
-            _isLoading = false;
-            _isSlowLoading = false;
-          });
-        }
-      } else if (response.statusCode == 404) {
-        if (mounted) {
-          setState(() {
-            _isLoading = false;
-            _isError = true;
-            _errorMessage = 'Песня не найдена';
-            _isSlowLoading = false;
-          });
-        }
-      } else {
-        if (mounted) {
-          setState(() {
-            _isLoading = false;
-            _isError = true;
-            _errorMessage = 'Ошибка загрузки: ${response.statusCode}';
-            _isSlowLoading = false;
-          });
-        }
       }
     } on SocketException catch (_) {
       _loadingTimer?.cancel();
@@ -1477,6 +1495,11 @@ class _LyricsRenderAreaState extends State<LyricsRenderArea> {
 
                   const Spacer(),
 
+                  // ФУНКЦИЯ ROMANIZED ОТКЛЮЧЕНА
+                  // Функция полностью реализована, однако отключена за ненадобностью
+                  // в связи с временным отсутствием доступа к базам азиатских песен.
+                  // Переключатель и логика остаются в коде для будущего использования.
+                  /*
                   // ЛОГИКА СКРЫТИЯ ROMAJI
                   // Используем hasRomaji, который мы объявили выше
                   if (hasRomaji) ...[
@@ -1486,6 +1509,7 @@ class _LyricsRenderAreaState extends State<LyricsRenderArea> {
                       onChanged: (val) => setState(() => _showRomaji = val),
                     ),
                   ],
+                  */
                 ],
               ),
             );

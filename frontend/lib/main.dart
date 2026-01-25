@@ -816,7 +816,7 @@ class _MainScreenState extends State<MainScreen> {
   @override
   Widget build(BuildContext context) {
     // Определение языка системы
-    final String locale = Platform.localeName;
+    final String locale = kIsWeb ? 'ru_RU' : Platform.localeName;
     final bool isRu = locale.startsWith('ru');
     final String labelHome = isRu ? "Главная" : "Home";
     final String labelSearch = isRu ? "Поиск" : "Search";

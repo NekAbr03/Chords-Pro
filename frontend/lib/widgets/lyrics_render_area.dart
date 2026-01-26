@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -173,12 +173,13 @@ class _LyricsRenderAreaState extends State<LyricsRenderArea> {
             _isLoading = false;
             _isError = true;
             _isSlowLoading = false;
-            if (e is SocketException) {
+            // В вебе SocketException не существует, поэтому используем безопасную проверку
+            if (!kIsWeb && e.toString().contains('SocketException')) {
               _errorMessage = 'Нет подключения к интернету';
             } else if (e is TimeoutException) {
               _errorMessage = 'Сервер не отвечает';
             } else {
-              _errorMessage = 'Ошибка загрузки';
+              _errorMessage = 'Ошибка загрузки (проверьте сеть)';
             }
           });
         }

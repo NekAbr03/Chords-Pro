@@ -261,12 +261,8 @@ class Scraper:
             return []
 
         return output
-    def get_top_songs(self):
-        """
-        Получает список популярных песен с Ultimate Guitar.
-        Использует страницу Explore (Top 100).
-        """
-        print(f"\n[TOP] Fetching popular songs...")
+    def get_ug_top_songs(self):
+        """Получает список популярных песен с Ultimate Guitar."""
         # type=300 (Chords)
         url = "https://www.ultimate-guitar.com/explore?type=300"
         
@@ -285,18 +281,12 @@ class Scraper:
             raw_json = html.unescape(store_div['data-content'])
             data = json.loads(raw_json)
             
-            # Путь для страницы Explore: store -> page -> data -> data -> tabs
             tabs = data.get('store', {}).get('page', {}).get('data', {}).get('data', {}).get('tabs', [])
-            
-            # Если там пусто, пробуем альтернативный путь (иногда бывает results)
             if not tabs:
                 tabs = data.get('store', {}).get('page', {}).get('data', {}).get('results', [])
 
             for item in tabs:
                 if not isinstance(item, dict): continue
-                
-                # Здесь можно не фильтровать так жестко, так как это уже чарт,
-                # но убедимся, что это аккорды
                 if item.get('type') == 'Chords' or item.get('marketing_type') == 'official':
                     output.append({
                         "title": item.get('song_name'),
@@ -305,13 +295,76 @@ class Scraper:
                         "source_label": "Ultimate Guitar",
                         "source_type": "ug"
                     })
-            
-            print(f"[TOP] Found {len(output)} popular songs")
             return output
-
         except Exception as e:
-            logging.error(f"[TOP] Error parsing top songs: {e}")
+            logging.error(f"[TOP-UG] Error parsing: {e}")
             return []
+
+    def get_mychords_top_songs(self):
+        """Получает популярные песни с MyChords (fallback)."""
+        url = "https://mychords.net/ru/top-songs" # ru версия для русского названия
+        html_content = self.fetch_page(url)
+        if not html_content or isinstance(html_content, dict):
+            return []
+
+        soup = BeautifulSoup(html_content, 'html.parser')
+        results = []
+        
+        # На MyChords список песен обычно в .b-listing или таблице
+        items = soup.find_all('div', class_='b-listing__item')
+        if not items:
+            # Альтернативный поиск в таблице или по ссылкам
+            items = soup.find_all('a', class_='b-listing__item-link')
+
+        for item in items[:50]: # Берем первые 50
+            try:
+                if item.name == 'a':
+                    link = item
+                else:
+                    link = item.find('a', class_='b-listing__item-link')
+                
+                if not link: continue
+                
+                href = link.get('href')
+                full_text = link.get_text(strip=True)
+                
+                if " - " in full_text:
+                    artist, title = full_text.split(" - ", 1)
+                else:
+                    artist, title = "Unknown", full_text
+
+                results.append({
+                    "title": title.strip(),
+                    "artist": artist.strip(),
+                    "url": urljoin("https://mychords.net", href),
+                    "source_label": "MyChords",
+                    "source_type": "mc"
+                })
+            except:
+                continue
+        return results
+
+    def get_top_songs(self):
+        """
+        Агрегирует топ: пробует UG, если 403 или пусто - берет MyChords.
+        """
+        print(f"\n[TOP] Fetching popular songs...")
+        
+        # 1. Пробуем UG
+        ug_top = self.get_ug_top_songs()
+        if ug_top:
+            print(f"[TOP] Found {len(ug_top)} songs on Ultimate Guitar")
+            return ug_top
+            
+        # 2. Если UG не отдал (из-за 403 или пустоты), пробуем MyChords
+        print(f"[TOP] UG failed or empty. Falling back to MyChords...")
+        mc_top = self.get_mychords_top_songs()
+        if mc_top:
+            print(f"[TOP] Found {len(mc_top)} songs on MyChords")
+            return mc_top
+            
+        print("[TOP] No popular songs found on any source.")
+        return []
 
     # --- PARSERS ---
 

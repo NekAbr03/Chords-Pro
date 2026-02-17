@@ -1,4 +1,4 @@
-import requests
+from curl_cffi import requests
 from bs4 import BeautifulSoup
 import pykakasi
 import re
@@ -71,7 +71,8 @@ class Romanizer:
 class Scraper:
     def __init__(self):
         self.romanizer = Romanizer()
-        self.session = requests.Session()
+        # Используем curl_cffi для имитации браузера (TLS fingerprint)
+        self.session = requests.Session(impersonate="chrome110")
         self.headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
@@ -96,14 +97,26 @@ class Scraper:
             
             cookies = {'tone': '0'} # tone=0 для MyChords
             
-            response = self.session.get(url, params=params, timeout=10, headers=headers, cookies=cookies)
+            response = self.session.get(
+                url, 
+                params=params, 
+                timeout=20, 
+                headers=headers, 
+                cookies=cookies,
+                allow_redirects=True
+            )
             
             # Если 404, просто возвращаем None, чтобы не крашить флоу
             if response.status_code == 404:
                 logging.warning(f"[FETCH] 404 Not Found: {url}")
                 return None
                 
-            response.raise_for_status()
+            if response.status_code != 200:
+                logging.error(f"[FETCH] {response.status_code} Error: {url}")
+                # Если 403, пробуем залогировать кусок контента для дебага
+                if response.status_code == 403:
+                    logging.info(f"[DEBUG] 403 Content: {response.text[:200]}")
+                return None
             
             # Автоматически возвращаем JSON для API запросов
             if 'application/json' in response.headers.get('Content-Type', ''):

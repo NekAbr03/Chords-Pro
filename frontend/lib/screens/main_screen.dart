@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 
 import '../services/favorites_service.dart';
 import '../widgets/adaptive_song_card.dart';
+import '../widgets/glass/glass_scaffold.dart';
+import '../widgets/glass/glass_tab_bar.dart';
 import 'home_tab.dart';
 import 'search_screen.dart';
 import 'song_view_screen.dart';
@@ -64,54 +66,45 @@ class _MainScreenState extends State<MainScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (!kIsWeb && Platform.isIOS) {
+      return _buildIOSLayout(context);
+    }
+    return _buildAndroidLayout(context);
+  }
+
+  Widget _buildIOSLayout(BuildContext context) {
+    return GlassScaffold(
+      // Title is handled inside the tabs or custom header in GlassScaffold if needed,
+      // but here we just pass the body.
+      body: IndexedStack(
+        index: _selectedIndex,
+        children: [
+          HomeTab(onChangeTab: _onItemTapped),
+          IgnorePointer(
+            ignoring: _selectedIndex != 1,
+            child: SearchScreen(scrollController: _searchScrollController),
+          ),
+          IgnorePointer(
+            ignoring: _selectedIndex != 2,
+            child: _buildLibraryList(),
+          ),
+        ],
+      ),
+      bottomNavigationBar: GlassTabBar(
+        currentIndex: _selectedIndex,
+        onTap: _onItemTapped,
+        onSearchTap: () =>
+            _onItemTapped(1), // Split search button goes to Search tab
+      ),
+    );
+  }
+
+  Widget _buildAndroidLayout(BuildContext context) {
     final String locale = kIsWeb ? 'ru_RU' : Platform.localeName;
     final bool isRu = locale.startsWith('ru');
     final String labelHome = isRu ? "Главная" : "Home";
     final String labelSearch = isRu ? "Поиск" : "Search";
     final String labelSaved = isRu ? "Сохраненные" : "Saved";
-
-    Widget buildLibraryList() {
-      return FutureBuilder<List<Map<String, dynamic>>>(
-        future: _loadLibrary(),
-        builder: (context, snapshot) {
-          if (!snapshot.hasData)
-            return const Center(child: CircularProgressIndicator());
-          final songs = snapshot.data!;
-          if (songs.isEmpty)
-            return const Center(child: Text("Нет сохраненных песен"));
-
-          return ListView.builder(
-            controller: _libraryScrollController,
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
-            itemCount: songs.length,
-            itemBuilder: (context, index) {
-              final song = songs[index];
-              return AdaptiveSongCard(
-                title: song["title"] ?? "Без названия",
-                artist: song["artist"] ?? "Неизвестен",
-                url: song["url"],
-                // Проверяем наличие ключа, так как старые сохранения могут его не иметь
-                source: song.containsKey('source_label')
-                    ? song['source_label']
-                    : null,
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => SongViewScreen(
-                        title: song["title"] ?? "Без названия",
-                        artist: song["artist"] ?? "Неизвестен",
-                        url: song["url"],
-                      ),
-                    ),
-                  ).then((_) => setState(() {}));
-                },
-              );
-            },
-          );
-        },
-      );
-    }
 
     return Scaffold(
       extendBodyBehindAppBar: false,
@@ -138,7 +131,7 @@ class _MainScreenState extends State<MainScreen> {
             ),
             IgnorePointer(
               ignoring: _selectedIndex != 2,
-              child: buildLibraryList(),
+              child: _buildLibraryList(),
             ),
           ],
         ),
@@ -165,6 +158,49 @@ class _MainScreenState extends State<MainScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildLibraryList() {
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: _loadLibrary(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData)
+          return const Center(child: CircularProgressIndicator());
+        final songs = snapshot.data!;
+        if (songs.isEmpty)
+          return const Center(child: Text("Нет сохраненных песен"));
+
+        return ListView.builder(
+          controller: _libraryScrollController,
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
+          itemCount: songs.length,
+          itemBuilder: (context, index) {
+            final song = songs[index];
+            return AdaptiveSongCard(
+              title: song["title"] ?? "Без названия",
+              artist: song["artist"] ?? "Неизвестен",
+              url: song["url"],
+              // Проверяем наличие ключа, так как старые сохранения могут его не иметь
+              source: song.containsKey('source_label')
+                  ? song['source_label']
+                  : null,
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => SongViewScreen(
+                      title: song["title"] ?? "Без названия",
+                      artist: song["artist"] ?? "Неизвестен",
+                      url: song["url"],
+                    ),
+                  ),
+                ).then((_) => setState(() {}));
+              },
+            );
+          },
+        );
+      },
     );
   }
 }

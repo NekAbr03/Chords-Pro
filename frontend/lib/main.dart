@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:dynamic_color/dynamic_color.dart';
@@ -43,6 +44,21 @@ class MusicChordsApp extends StatelessWidget {
 
     return DynamicColorBuilder(
       builder: (lightDynamic, darkDynamic) {
+        if (!kIsWeb && Platform.isIOS) {
+          // iOS Entry Point -> Liquid Glass
+          return const CupertinoApp(
+            title: 'Chords Pro',
+            debugShowCheckedModeBanner: false,
+            theme: CupertinoThemeData(
+              brightness: Brightness.dark, // Glass UI looks best in dark
+              primaryColor: Color(0xFFD0BCFF),
+              scaffoldBackgroundColor: Colors.black,
+            ),
+            home: MainScreen(),
+          );
+        }
+
+        // Android / Web Entry Point -> Material 3
         ColorScheme lightScheme =
             lightDynamic?.copyWith(brightness: Brightness.light) ??
             ColorScheme.fromSeed(

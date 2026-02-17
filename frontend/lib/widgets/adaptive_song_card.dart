@@ -2,6 +2,7 @@ import 'dart:io'; // Для Platform
 import 'dart:ui'; // Для ImageFilter
 import 'package:flutter/foundation.dart'; // Для kIsWeb
 import 'package:flutter/material.dart';
+import 'glass/liquid_controls.dart';
 
 class AdaptiveSongCard extends StatelessWidget {
   final String title;
@@ -22,10 +23,9 @@ class AdaptiveSongCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final bool isDark = theme.brightness == Brightness.dark;
-
-    // --- 1. ANDROID (Material Design 3) ---
+    // --- 2. IOS & WEB (Liquid Glass) ---
     if (!kIsWeb && Platform.isAndroid) {
+      // Keep existing Android logic (Material 3)
       return Card(
         elevation: 0,
         color: theme.colorScheme.surfaceContainerLow,
@@ -39,83 +39,13 @@ class AdaptiveSongCard extends StatelessWidget {
       );
     }
 
-    // --- 2. IOS NATIVE (UiKitView + Blur) ---
-    if (!kIsWeb && Platform.isIOS) {
-      return Container(
-        height: 80,
-        margin: const EdgeInsets.only(bottom: 12),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(20),
-          child: Stack(
-            children: [
-              const UiKitView(viewType: 'liquid-glass-view'),
-              Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  onTap: onTap,
-                  child: Center(child: _buildContent(theme)),
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    // --- 3. WEB (Flutter Liquid Glass Simulation) ---
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: isDark
-                ? Colors.black.withOpacity(0.3)
-                : Colors.black.withOpacity(0.05),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(20),
-        child: Stack(
-          children: [
-            BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 20.0, sigmaY: 20.0),
-              child: Container(
-                decoration: BoxDecoration(
-                  color: isDark
-                      ? Colors.black.withOpacity(0.2)
-                      : Colors.white.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                    color: Colors.white.withOpacity(0.2),
-                    width: 1.0,
-                  ),
-                ),
-              ),
-            ),
-            Material(
-              color: Colors.transparent,
-              child: InkWell(
-                onTap: onTap,
-                borderRadius: BorderRadius.circular(20),
-                child: _buildContent(theme),
-              ),
-            ),
-          ],
-        ),
+    // iOS / Web -> Liquid Glass Style
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: GlassContainer(
+        onTap: onTap,
+        borderRadius: 20,
+        child: _buildContent(theme),
       ),
     );
   }

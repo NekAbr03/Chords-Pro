@@ -92,4 +92,4 @@ def get_debug_html(url: str = Query(...)):
 if __name__ == "__main__":
     # Render сам назначит порт через переменную окружения PORT
     port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+    uvicorn.run(app, host="0.0.0.0", port=port)

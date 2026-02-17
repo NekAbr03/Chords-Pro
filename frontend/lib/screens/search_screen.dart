@@ -1,4 +1,7 @@
 import 'dart:convert';
+import 'dart:io';
+import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -91,15 +94,10 @@ class _SearchScreenState extends State<SearchScreen> {
           setState(() {
             _searchResults = localResults;
             _nothingFound = false;
-            _isSearching = false; // Выключаем лоадер
+            _isSearching = false;
           });
 
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text("Поиск без интернета. Найдено в кэше."),
-              duration: Duration(seconds: 3),
-            ),
-          );
+          _showOfflineMessage();
         } else {
           // Если и локально пусто, показываем ошибку
           setState(() {
@@ -111,82 +109,84 @@ class _SearchScreenState extends State<SearchScreen> {
     }
   }
 
+  void _showOfflineMessage() {
+    if (!kIsWeb && Platform.isIOS) {
+      showCupertinoDialog(
+        context: context,
+        barrierDismissible: true,
+        builder: (ctx) => CupertinoAlertDialog(
+          title: const Text("Нет сети"),
+          content: const Text("Поиск выполнен по сохраненным песням."),
+          actions: [
+            CupertinoDialogAction(
+              child: const Text("OK"),
+              onPressed: () => Navigator.pop(ctx),
+            ),
+          ],
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Поиск без интернета. Найдено в кэше."),
+          duration: Duration(seconds: 3),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    if (!kIsWeb && Platform.isIOS) {
+      return _buildIOSLayout(context);
+    }
+    return _buildAndroidLayout(context);
+  }
 
-    Widget buildBody() {
-      if (_isSearching) return const Center(child: CircularProgressIndicator());
-      if (_error != null)
-        return Center(child: Text(_error!, textAlign: TextAlign.center));
-      if (_nothingFound) return const Center(child: Text("Ничего не найдено"));
-
-      if (_searchResults.isNotEmpty) {
-        return ListView.builder(
-          controller: widget.scrollController,
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          itemCount: _searchResults.length,
-          itemBuilder: (context, index) {
-            final item = _searchResults[index];
-            return AdaptiveSongCard(
-              title: item['title'] ?? 'Без названия',
-              artist: item['artist'] ?? 'Неизвестен',
-              url: item['url'],
-              source: item['source_label'],
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => SongViewScreen(
-                      title: item['title'] ?? 'Без названия',
-                      artist: item['artist'] ?? 'Неизвестен',
-                      url: item['url'],
-                    ),
-                  ),
-                ).then((_) => setState(() {}));
-              },
-            );
-          },
-        );
-      }
-
-      if (_history.isNotEmpty) {
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+  // --- IOS LAYOUT ---
+  Widget _buildIOSLayout(BuildContext context) {
+    return CupertinoPageScaffold(
+      backgroundColor: Colors.transparent, // Для GlassScaffold фона
+      child: SafeArea(
+        bottom: false,
+        child: Column(
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(24, 8, 16, 8),
-              child: Text(
-                "Недавние",
-                style: theme.textTheme.titleSmall?.copyWith(
-                  color: theme.colorScheme.outline,
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+              child: CupertinoSearchTextField(
+                controller: _searchController,
+                placeholder: 'Поиск песен...',
+                style: const TextStyle(color: CupertinoColors.white),
+                itemColor: CupertinoColors.systemGrey2, // Иконка лупы
+                placeholderStyle: const TextStyle(
+                  color: CupertinoColors.systemGrey2,
                 ),
-              ),
-            ),
-            Expanded(
-              child: ListView.builder(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                itemCount: _history.length,
-                itemBuilder: (context, index) {
-                  final historyItem = _history[index];
-                  return ListTile(
-                    leading: const Icon(Icons.history, size: 20),
-                    title: Text(historyItem),
-                    trailing: IconButton(
-                      icon: const Icon(Icons.close, size: 18),
-                      onPressed: () => _removeFromHistory(historyItem),
-                    ),
-                    onTap: () => _performSearch(historyItem),
-                  );
+                decoration: BoxDecoration(
+                  color: CupertinoColors.systemGrey6.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                onSubmitted: _performSearch,
+                onChanged: (text) {
+                  if (text.isEmpty) {
+                    setState(() {
+                      _searchResults = [];
+                      _error = null;
+                      _nothingFound = false;
+                    });
+                  }
                 },
               ),
             ),
+            Expanded(child: _buildBodyContent(isIOS: true)),
           ],
-        );
-      }
-      return const Center(child: Text("Введите запрос для поиска"));
-    }
+        ),
+      ),
+    );
+  }
 
+  // --- ANDROID LAYOUT ---
+  Widget _buildAndroidLayout(BuildContext context) {
+    final theme = Theme.of(context);
     final bool canPop =
         _searchResults.isEmpty && _searchController.text.isEmpty;
 
@@ -241,8 +241,169 @@ class _SearchScreenState extends State<SearchScreen> {
               ),
             ),
           ),
-          Expanded(child: buildBody()),
+          Expanded(child: _buildBodyContent(isIOS: false)),
         ],
+      ),
+    );
+  }
+
+  // --- SHARED BODY CONTENT ---
+  Widget _buildBodyContent({required bool isIOS}) {
+    if (_isSearching) {
+      return const Center(child: CupertinoActivityIndicator(radius: 14));
+    }
+    if (_error != null) {
+      return Center(
+        child: Text(
+          _error!,
+          textAlign: TextAlign.center,
+          style: TextStyle(color: isIOS ? CupertinoColors.white : null),
+        ),
+      );
+    }
+    if (_nothingFound) {
+      return Center(
+        child: Text(
+          "Ничего не найдено",
+          style: TextStyle(color: isIOS ? CupertinoColors.systemGrey2 : null),
+        ),
+      );
+    }
+
+    if (_searchResults.isNotEmpty) {
+      return ListView.builder(
+        controller: widget.scrollController,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        itemCount: _searchResults.length,
+        itemBuilder: (context, index) {
+          final item = _searchResults[index];
+          // AdaptiveSongCard внутри себя уже решает, как рисоваться,
+          // но важно, чтобы он не использовал Material-контекст, если его нет.
+          // В нашей реализации AdaptiveSongCard (GlassContainer) на iOS
+          // не использует Material виджеты, так что должно быть ок.
+          return AdaptiveSongCard(
+            title: item['title'] ?? 'Без названия',
+            artist: item['artist'] ?? 'Неизвестен',
+            url: item['url'],
+            source: item['source_label'],
+            onTap: () {
+              // Навигация
+              if (isIOS) {
+                Navigator.of(context).push(
+                  CupertinoPageRoute(
+                    builder: (context) => SongViewScreen(
+                      title: item['title'] ?? 'Без названия',
+                      artist: item['artist'] ?? 'Неизвестен',
+                      url: item['url'],
+                    ),
+                  ),
+                );
+              } else {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => SongViewScreen(
+                      title: item['title'] ?? 'Без названия',
+                      artist: item['artist'] ?? 'Неизвестен',
+                      url: item['url'],
+                    ),
+                  ),
+                ).then((_) => setState(() {}));
+              }
+            },
+          );
+        },
+      );
+    }
+
+    if (_history.isNotEmpty) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 8, 16, 8),
+            child: Text(
+              "Недавние",
+              style: isIOS
+                  ? const TextStyle(
+                      color: CupertinoColors.systemGrey2,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    )
+                  : Theme.of(context).textTheme.titleSmall?.copyWith(
+                      color: Theme.of(context).colorScheme.outline,
+                    ),
+            ),
+          ),
+          Expanded(
+            child: ListView.separated(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              itemCount: _history.length,
+              separatorBuilder: (_, __) => isIOS
+                  ? const Divider(
+                      height: 1,
+                      color: CupertinoColors.separator,
+                      indent: 44,
+                    )
+                  : const Divider(height: 1),
+              itemBuilder: (context, index) {
+                final historyItem = _history[index];
+                if (isIOS) {
+                  return GestureDetector(
+                    onTap: () => _performSearch(historyItem),
+                    child: Container(
+                      color: Colors.transparent, // для кликабельности
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            CupertinoIcons.time,
+                            color: CupertinoColors.systemGrey,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              historyItem,
+                              style: const TextStyle(
+                                color: CupertinoColors.white,
+                                fontSize: 16,
+                              ),
+                            ),
+                          ),
+                          CupertinoButton(
+                            padding: EdgeInsets.zero,
+                            minSize: 0,
+                            child: const Icon(
+                              CupertinoIcons.clear_circled,
+                              color: CupertinoColors.systemGrey,
+                            ),
+                            onPressed: () => _removeFromHistory(historyItem),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                } else {
+                  return ListTile(
+                    leading: const Icon(Icons.history, size: 20),
+                    title: Text(historyItem),
+                    trailing: IconButton(
+                      icon: const Icon(Icons.close, size: 18),
+                      onPressed: () => _removeFromHistory(historyItem),
+                    ),
+                    onTap: () => _performSearch(historyItem),
+                  );
+                }
+              },
+            ),
+          ),
+        ],
+      );
+    }
+    return Center(
+      child: Text(
+        "Введите запрос для поиска",
+        style: TextStyle(color: isIOS ? CupertinoColors.systemGrey2 : null),
       ),
     );
   }

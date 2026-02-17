@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -159,13 +161,30 @@ class _LyricsRenderAreaState extends State<LyricsRenderArea> {
           setState(() => _isLoading = false);
 
           // --- ВОТ ЭТО ДОБАВЛЯЕМ ДЛЯ УВЕДОМЛЕНИЯ ---
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text("Нет сети. Показана сохраненная версия."),
-              duration: Duration(seconds: 3),
-              behavior: SnackBarBehavior.floating, // Чтобы плавал над кнопками
-            ),
-          );
+          if (!kIsWeb && Platform.isIOS) {
+            showCupertinoDialog(
+              context: context,
+              barrierDismissible: true,
+              builder: (ctx) => CupertinoAlertDialog(
+                title: const Text("Нет сети"),
+                content: const Text("Показана сохраненная версия."),
+                actions: [
+                  CupertinoDialogAction(
+                    child: const Text("OK"),
+                    onPressed: () => Navigator.pop(ctx),
+                  ),
+                ],
+              ),
+            );
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text("Нет сети. Показана сохраненная версия."),
+                duration: Duration(seconds: 3),
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          }
           // ------------------------------------------
         } else {
           // Если данных нет вообще - показываем ошибку

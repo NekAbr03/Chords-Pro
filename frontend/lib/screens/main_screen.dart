@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart'; // Для kIsWeb
 import 'package:flutter/material.dart';
 
@@ -186,16 +187,29 @@ class _MainScreenState extends State<MainScreen> {
                   ? song['source_label']
                   : null,
               onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => SongViewScreen(
-                      title: song["title"] ?? "Без названия",
-                      artist: song["artist"] ?? "Неизвестен",
-                      url: song["url"],
+                if (!kIsWeb && Platform.isIOS) {
+                  Navigator.push(
+                    context,
+                    CupertinoPageRoute(
+                      builder: (context) => SongViewScreen(
+                        title: song["title"] ?? "Без названия",
+                        artist: song["artist"] ?? "Неизвестен",
+                        url: song["url"],
+                      ),
                     ),
-                  ),
-                ).then((_) => setState(() {}));
+                  ).then((_) => setState(() {}));
+                } else {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => SongViewScreen(
+                        title: song["title"] ?? "Без названия",
+                        artist: song["artist"] ?? "Неизвестен",
+                        url: song["url"],
+                      ),
+                    ),
+                  ).then((_) => setState(() {}));
+                }
               },
             );
           },

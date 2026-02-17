@@ -1,3 +1,5 @@
+import 'dart:io';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
@@ -123,8 +125,61 @@ class _SongViewScreenState extends State<SongViewScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (!kIsWeb && Platform.isIOS) {
+      return _buildIOSLayout(context);
+    }
+    return _buildAndroidLayout(context);
+  }
+
+  // --- IOS LAYOUT ---
+  Widget _buildIOSLayout(BuildContext context) {
+    final screenHeight = MediaQuery.of(context).size.height;
+    final adaptiveHeight = (screenHeight * 0.25).clamp(140.0, 180.0);
+
+    return CupertinoPageScaffold(
+      backgroundColor: Colors.transparent, // Glass effect
+      navigationBar: CupertinoNavigationBar(
+        backgroundColor: Colors.transparent,
+        middle: Column(
+          children: [
+            Text(
+              widget.title,
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+            Text(
+              widget.artist,
+              style: const TextStyle(
+                fontSize: 12,
+                color: CupertinoColors.systemGrey,
+              ),
+            ),
+          ],
+        ),
+        trailing: CupertinoButton(
+          padding: EdgeInsets.zero,
+          child: Icon(
+            _isFavorite ? CupertinoIcons.heart_fill : CupertinoIcons.heart,
+            color: _isFavorite
+                ? CupertinoColors.systemRed
+                : CupertinoColors.label,
+          ),
+          onPressed: _toggleFavorite,
+        ),
+      ),
+      child: SafeArea(
+        bottom: false,
+        child: _buildSharedBody(
+          context,
+          adaptiveHeight: adaptiveHeight,
+          isIOS: true,
+        ),
+      ),
+    );
+  }
+
+  // --- ANDROID LAYOUT ---
+  Widget _buildAndroidLayout(BuildContext context) {
     final theme = Theme.of(context);
-    final screenWidth = MediaQuery.of(context).size.width;
     final screenHeight = MediaQuery.of(context).size.height;
     final adaptiveHeight = (screenHeight * 0.25).clamp(140.0, 180.0);
 
@@ -157,87 +212,122 @@ class _SongViewScreenState extends State<SongViewScreen> {
           ),
         ],
       ),
-      body: Stack(
-        children: [
-          Positioned.fill(
-            child: LyricsRenderArea(
-              url: widget.url,
-              transposeLevel: _transposeLevel,
-              bottomPadding: _isPanelExpanded ? adaptiveHeight + 10 : 80,
-              onTransposeChange: (newLevel) =>
-                  setState(() => _transposeLevel = newLevel),
-              onChordsLoaded: (chords) {
-                if (!listEquals(_rawUniqueChords, chords)) {
-                  // FIX: Проверяем, жив ли экран
-                  if (mounted) {
-                    setState(() => _rawUniqueChords = chords);
-                  }
+      body: _buildSharedBody(
+        context,
+        adaptiveHeight: adaptiveHeight,
+        isIOS: false,
+      ),
+    );
+  }
+
+  // --- SHARED BODY ---
+  Widget _buildSharedBody(
+    BuildContext context, {
+    required double adaptiveHeight,
+    required bool isIOS,
+  }) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    // Определяем тему для панели аккордов
+    final panelColor = isIOS
+        ? CupertinoColors.systemGrey6.withOpacity(0.9)
+        : Theme.of(context).colorScheme.secondaryContainer;
+
+    final panelIconColor = isIOS
+        ? CupertinoColors.label
+        : Theme.of(context).colorScheme.onSecondaryContainer;
+
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: LyricsRenderArea(
+            url: widget.url,
+            transposeLevel: _transposeLevel,
+            bottomPadding: _isPanelExpanded ? adaptiveHeight + 10 : 80,
+            onTransposeChange: (newLevel) =>
+                setState(() => _transposeLevel = newLevel),
+            onChordsLoaded: (chords) {
+              if (!listEquals(_rawUniqueChords, chords)) {
+                if (mounted) {
+                  setState(() => _rawUniqueChords = chords);
                 }
-              },
-              onChordTap: _onChordTapInternal,
-            ),
+              }
+            },
+            onChordTap: _onChordTapInternal,
           ),
-          Align(
-            alignment: _isPanelExpanded
-                ? Alignment.bottomCenter
-                : Alignment.bottomRight,
-            child: GestureDetector(
-              onVerticalDragUpdate: _onPanelDragUpdate,
-              onTap: _isPanelExpanded ? null : _togglePanel,
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 300),
-                curve: Curves.easeOutCubic,
-                width: _isPanelExpanded ? screenWidth : _panelCollapsedSize,
-                height: _isPanelExpanded ? adaptiveHeight : _panelCollapsedSize,
-                margin: EdgeInsets.only(
-                  right: _isPanelExpanded ? 0 : _panelMarginCollapsed,
-                  bottom: _isPanelExpanded ? 0 : _panelMarginCollapsed,
-                ),
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.secondaryContainer,
-                  borderRadius: _isPanelExpanded
-                      ? const BorderRadius.vertical(top: Radius.circular(24))
-                      : BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.15),
-                      blurRadius: 8,
-                      offset: const Offset(0, -2),
+        ),
+        Align(
+          alignment: _isPanelExpanded
+              ? Alignment.bottomCenter
+              : Alignment.bottomRight,
+          child: GestureDetector(
+            onVerticalDragUpdate: _onPanelDragUpdate,
+            onTap: _isPanelExpanded ? null : _togglePanel,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeOutCubic,
+              width: _isPanelExpanded ? screenWidth : _panelCollapsedSize,
+              height: _isPanelExpanded ? adaptiveHeight : _panelCollapsedSize,
+              margin: EdgeInsets.only(
+                right: _isPanelExpanded ? 0 : _panelMarginCollapsed,
+                bottom: _isPanelExpanded ? 0 : _panelMarginCollapsed,
+              ),
+              decoration: BoxDecoration(
+                color: panelColor,
+                borderRadius: _isPanelExpanded
+                    ? const BorderRadius.vertical(top: Radius.circular(24))
+                    : BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.15),
+                    blurRadius: 8,
+                    offset: const Offset(0, -2),
+                  ),
+                ],
+              ),
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  Offstage(
+                    offstage: !_isPanelExpanded,
+                    child: _buildExpandedPanel(
+                      context, // Передаем context
+                      isIOS: isIOS,
+                      textColor: panelIconColor, // Reusing icon color for text
                     ),
-                  ],
-                ),
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    Offstage(
-                      offstage: !_isPanelExpanded,
-                      child: _buildExpandedPanel(theme),
+                  ),
+                  Visibility(
+                    visible: !_isPanelExpanded,
+                    child: Center(
+                      child: Icon(
+                        isIOS
+                            ? CupertinoIcons.music_note_2
+                            : Icons.music_note_outlined,
+                        size: 28,
+                        color: panelIconColor,
+                      ),
                     ),
-                    Visibility(
-                      visible: !_isPanelExpanded,
-                      child: _buildCollapsedButton(),
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
-  Widget _buildCollapsedButton() {
-    return Center(
-      child: Icon(
-        Icons.music_note_outlined,
-        size: 28,
-        color: Theme.of(context).colorScheme.onSecondaryContainer,
-      ),
-    );
-  }
+  // Убрал _buildCollapsedButton, так как перенес внутрь _buildSharedBody
 
-  Widget _buildExpandedPanel(ThemeData theme) {
+  Widget _buildExpandedPanel(
+    BuildContext context, {
+    required bool isIOS,
+    Color? textColor,
+  }) {
+    // Стиль текста
+    final textStyle = isIOS
+        ? const TextStyle(fontSize: 14, color: CupertinoColors.label)
+        : Theme.of(context).textTheme.bodyMedium;
+
     return Column(
       children: [
         Container(
@@ -247,16 +337,18 @@ class _SongViewScreenState extends State<SongViewScreen> {
             width: 48,
             height: 4,
             decoration: BoxDecoration(
-              color: theme.colorScheme.onSurfaceVariant.withOpacity(0.4),
+              color: isIOS
+                  ? CupertinoColors.systemGrey.withOpacity(0.5)
+                  : Theme.of(
+                      context,
+                    ).colorScheme.onSurfaceVariant.withOpacity(0.4),
               borderRadius: BorderRadius.circular(2),
             ),
           ),
         ),
         Expanded(
           child: _rawUniqueChords.isEmpty
-              ? Center(
-                  child: Text('Загрузка...', style: theme.textTheme.bodyMedium),
-                )
+              ? Center(child: Text('Загрузка...', style: textStyle))
               : Padding(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 12,
@@ -279,14 +371,19 @@ class _SongViewScreenState extends State<SongViewScreen> {
                         child: Container(
                           padding: const EdgeInsets.all(6),
                           decoration: BoxDecoration(
-                            color: theme.brightness == Brightness.dark
+                            color: isIOS
+                                ? CupertinoColors.systemBackground.withOpacity(
+                                    0.1,
+                                  )
+                                : Theme.of(context).brightness ==
+                                      Brightness.dark
                                 ? Colors.white.withOpacity(0.08)
                                 : Colors.black.withOpacity(0.08),
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: GuitarChordWidget(
                             chord: ChordData(displayName, positions),
-                            color: theme.colorScheme.onSecondaryContainer,
+                            color: textColor ?? Colors.white,
                           ),
                         ),
                       );

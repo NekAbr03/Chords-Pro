@@ -122,7 +122,7 @@ class Scraper:
             if 'application/json' in response.headers.get('Content-Type', ''):
                 return response.json()
             
-            response.encoding = response.apparent_encoding 
+            # curl_cffi автоматически декодирует текст
             return response.text
 
         except Exception as e:
@@ -315,7 +315,7 @@ class Scraper:
 
     def get_mychords_top_songs(self):
         """Получает популярные песни с MyChords (fallback)."""
-        url = "https://mychords.net/ru/top-songs" # ru версия для русского названия
+        url = "https://mychords.net/top" # Исправленный URL
         html_content = self.fetch_page(url)
         if not html_content or isinstance(html_content, dict):
             return []

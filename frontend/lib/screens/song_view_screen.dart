@@ -33,7 +33,6 @@ class _SongViewScreenState extends State<SongViewScreen> {
   bool _isPanelExpanded = false;
   static const double _panelCollapsedSize = 56.0;
   static const double _panelMarginCollapsed = 16.0;
-  static const double _panelExpandedHeight = 200.0;
 
   bool _isFavorite = false;
 
@@ -129,11 +128,15 @@ class _SongViewScreenState extends State<SongViewScreen> {
     final screenHeight = MediaQuery.of(context).size.height;
     final adaptiveHeight = (screenHeight * 0.25).clamp(140.0, 180.0);
 
+    final contentBg = theme.brightness == Brightness.dark
+        ? theme.colorScheme.surfaceContainerHigh
+        : theme.colorScheme.surfaceContainerLow;
+
     return Scaffold(
       extendBodyBehindAppBar: false,
-      backgroundColor: theme.colorScheme.surface,
+      backgroundColor: contentBg,
       appBar: AppBar(
-        backgroundColor: theme.colorScheme.surface,
+        backgroundColor: contentBg,
         elevation: 0,
         centerTitle: true,
         title: Column(
@@ -157,11 +160,10 @@ class _SongViewScreenState extends State<SongViewScreen> {
       body: Stack(
         children: [
           Positioned.fill(
-            bottom: _isPanelExpanded ? _panelExpandedHeight : 0,
             child: LyricsRenderArea(
               url: widget.url,
               transposeLevel: _transposeLevel,
-              bottomPadding: _isPanelExpanded ? _panelExpandedHeight + 20 : 0,
+              bottomPadding: _isPanelExpanded ? adaptiveHeight + 10 : 80,
               onTransposeChange: (newLevel) =>
                   setState(() => _transposeLevel = newLevel),
               onChordsLoaded: (chords) {

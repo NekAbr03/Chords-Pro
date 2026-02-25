@@ -1,5 +1,8 @@
 import 'dart:convert';
+import 'dart:io';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart'; // Для kIsWeb
 
 import '../config/app_config.dart';
 import '../services/cache_service.dart';
@@ -87,6 +90,114 @@ class _HomeTabState extends State<HomeTab> {
 
   @override
   Widget build(BuildContext context) {
+    if (!kIsWeb && Platform.isIOS) {
+      return _buildIOSLayout(context);
+    }
+    return _buildAndroidLayout(context);
+  }
+
+  Widget _buildIOSLayout(BuildContext context) {
+    final isDark = CupertinoTheme.brightnessOf(context) == Brightness.dark;
+    final bgColor = isDark
+        ? CupertinoColors.black
+        : CupertinoColors.systemBackground;
+
+    if (_isLoading && _topSongs.isEmpty) {
+      return Container(
+        color: bgColor,
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const CupertinoActivityIndicator(radius: 20),
+              const SizedBox(height: 24),
+              Text(
+                "Загрузка чартов...",
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 20,
+                  color: isDark ? CupertinoColors.white : CupertinoColors.black,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (_errorMessage != null && _topSongs.isEmpty) {
+      return Container(
+        color: bgColor,
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(
+                CupertinoIcons.exclamationmark_circle,
+                size: 64,
+                color: CupertinoColors.systemRed,
+              ),
+              const SizedBox(height: 16),
+              Text(_errorMessage!, textAlign: TextAlign.center),
+              const SizedBox(height: 24),
+              CupertinoButton.filled(
+                onPressed: _loadData,
+                child: const Text("Попробовать снова"),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      color: bgColor,
+      child: CustomScrollView(
+        slivers: [
+          CupertinoSliverRefreshControl(onRefresh: _loadData),
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+              child: Text(
+                "Популярное сейчас",
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: isDark ? CupertinoColors.white : CupertinoColors.black,
+                ),
+              ),
+            ),
+          ),
+          SliverList(
+            delegate: SliverChildBuilderDelegate((context, index) {
+              final item = _topSongs[index];
+              return AdaptiveSongCard(
+                title: item['title'] ?? 'Без названия',
+                artist: item['artist'] ?? 'Неизвестен',
+                url: item['url'],
+                source: item['source_label'],
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    CupertinoPageRoute(
+                      builder: (context) => SongViewScreen(
+                        title: item['title'] ?? 'Без названия',
+                        artist: item['artist'] ?? 'Неизвестен',
+                        url: item['url'],
+                      ),
+                    ),
+                  );
+                },
+              );
+            }, childCount: _topSongs.length),
+          ),
+          const SliverPadding(padding: EdgeInsets.only(bottom: 80)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAndroidLayout(BuildContext context) {
     final theme = Theme.of(context);
 
     // ВАЖНО: Кастомный экран загрузки (Первый запуск / Холодный старт)

@@ -2,11 +2,10 @@ import 'dart:io';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart'; // Для kIsWeb
 import 'package:flutter/material.dart';
+import 'package:cupertino_native/cupertino_native.dart';
 
 import '../services/favorites_service.dart';
 import '../widgets/adaptive_song_card.dart';
-import '../widgets/glass/glass_scaffold.dart';
-import '../widgets/glass/glass_tab_bar.dart';
 import 'home_tab.dart';
 import 'search_screen.dart';
 import 'song_view_screen.dart';
@@ -74,28 +73,60 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   Widget _buildIOSLayout(BuildContext context) {
-    return GlassScaffold(
-      // Title is handled inside the tabs or custom header in GlassScaffold if needed,
-      // but here we just pass the body.
-      body: IndexedStack(
-        index: _selectedIndex,
+    const String labelHome = "Home";
+    const String labelSearch = "Search";
+    const String labelSaved = "Saved";
+
+    return CupertinoPageScaffold(
+      navigationBar: CupertinoNavigationBar(
+        middle: Text(
+          _selectedIndex == 0
+              ? labelHome
+              : _selectedIndex == 1
+              ? labelSearch
+              : labelSaved,
+        ),
+      ),
+      child: Stack(
         children: [
-          HomeTab(onChangeTab: _onItemTapped),
-          IgnorePointer(
-            ignoring: _selectedIndex != 1,
-            child: SearchScreen(scrollController: _searchScrollController),
+          SafeArea(
+            bottom: false,
+            child: IndexedStack(
+              index: _selectedIndex,
+              children: [
+                HomeTab(onChangeTab: _onItemTapped),
+                IgnorePointer(
+                  ignoring: _selectedIndex != 1,
+                  child: SearchScreen(
+                    scrollController: _searchScrollController,
+                  ),
+                ),
+                IgnorePointer(
+                  ignoring: _selectedIndex != 2,
+                  child: _buildLibraryList(),
+                ),
+              ],
+            ),
           ),
-          IgnorePointer(
-            ignoring: _selectedIndex != 2,
-            child: _buildLibraryList(),
+          Align(
+            alignment: Alignment.bottomCenter,
+            child: CNTabBar(
+              currentIndex: _selectedIndex,
+              onTap: _onItemTapped,
+              items: const [
+                CNTabBarItem(
+                  icon: CNSymbol('music.note.house.fill'),
+                  label: labelHome,
+                ),
+                CNTabBarItem(
+                  icon: CNSymbol('magnifyingglass'),
+                  label: labelSearch,
+                ),
+                CNTabBarItem(icon: CNSymbol('heart.fill'), label: labelSaved),
+              ],
+            ),
           ),
         ],
-      ),
-      bottomNavigationBar: GlassTabBar(
-        currentIndex: _selectedIndex,
-        onTap: _onItemTapped,
-        onSearchTap: () =>
-            _onItemTapped(1), // Split search button goes to Search tab
       ),
     );
   }
@@ -166,11 +197,13 @@ class _MainScreenState extends State<MainScreen> {
     return FutureBuilder<List<Map<String, dynamic>>>(
       future: _loadLibrary(),
       builder: (context, snapshot) {
-        if (!snapshot.hasData)
+        if (!snapshot.hasData) {
           return const Center(child: CircularProgressIndicator());
+        }
         final songs = snapshot.data!;
-        if (songs.isEmpty)
+        if (songs.isEmpty) {
           return const Center(child: Text("Нет сохраненных песен"));
+        }
 
         return ListView.builder(
           controller: _libraryScrollController,

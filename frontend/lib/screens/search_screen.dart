@@ -145,8 +145,13 @@ class _SearchScreenState extends State<SearchScreen> {
 
   // --- IOS LAYOUT ---
   Widget _buildIOSLayout(BuildContext context) {
+    final isDark = CupertinoTheme.brightnessOf(context) == Brightness.dark;
+    final bgColor = isDark
+        ? CupertinoColors.black
+        : CupertinoColors.systemBackground;
+
     return CupertinoPageScaffold(
-      backgroundColor: Colors.transparent, // Для GlassScaffold фона
+      backgroundColor: bgColor,
       child: SafeArea(
         bottom: false,
         child: Column(
@@ -156,13 +161,17 @@ class _SearchScreenState extends State<SearchScreen> {
               child: CupertinoSearchTextField(
                 controller: _searchController,
                 placeholder: 'Поиск песен...',
-                style: const TextStyle(color: CupertinoColors.white),
-                itemColor: CupertinoColors.systemGrey2, // Иконка лупы
+                style: TextStyle(
+                  color: isDark ? CupertinoColors.white : CupertinoColors.black,
+                ),
+                itemColor: CupertinoColors.systemGrey, // Иконка лупы
                 placeholderStyle: const TextStyle(
-                  color: CupertinoColors.systemGrey2,
+                  color: CupertinoColors.systemGrey,
                 ),
                 decoration: BoxDecoration(
-                  color: CupertinoColors.systemGrey6.withOpacity(0.2),
+                  color: isDark
+                      ? CupertinoColors.systemGrey6.withValues(alpha: 0.2)
+                      : CupertinoColors.systemGrey6,
                   borderRadius: BorderRadius.circular(10),
                 ),
                 onSubmitted: _performSearch,
@@ -339,7 +348,7 @@ class _SearchScreenState extends State<SearchScreen> {
             child: ListView.separated(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               itemCount: _history.length,
-              separatorBuilder: (_, __) => isIOS
+              separatorBuilder: (_, _) => isIOS
                   ? const Divider(
                       height: 1,
                       color: CupertinoColors.separator,
@@ -372,7 +381,7 @@ class _SearchScreenState extends State<SearchScreen> {
                           ),
                           CupertinoButton(
                             padding: EdgeInsets.zero,
-                            minSize: 0,
+                            minimumSize: Size.zero,
                             child: const Icon(
                               CupertinoIcons.clear_circled,
                               color: CupertinoColors.systemGrey,

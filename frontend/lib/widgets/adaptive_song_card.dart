@@ -1,9 +1,8 @@
 import 'dart:io';
-import 'dart:ui';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'glass/liquid_controls.dart';
+import 'package:cupertino_native/cupertino_native.dart';
 
 class AdaptiveSongCard extends StatelessWidget {
   final String title;
@@ -24,12 +23,17 @@ class AdaptiveSongCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (!kIsWeb && Platform.isIOS) {
-      // iOS: Liquid Glass + Cupertino Styles
-      return Padding(
-        padding: const EdgeInsets.only(bottom: 12),
-        child: GlassContainer(
-          onTap: onTap,
-          borderRadius: 20,
+      // iOS: Native Cupertino Style (No Glass)
+      final isDark = CupertinoTheme.brightnessOf(context) == Brightness.dark;
+
+      return Container(
+        margin: const EdgeInsets.only(bottom: 1), // Separator effect
+        color: isDark
+            ? CupertinoColors.black
+            : CupertinoColors.systemBackground,
+        child: CupertinoButton(
+          padding: EdgeInsets.zero,
+          onPressed: onTap,
           child: _buildIOSContent(context),
         ),
       );
@@ -52,9 +56,10 @@ class AdaptiveSongCard extends StatelessWidget {
 
   // --- IOS CONTENT ---
   Widget _buildIOSContent(BuildContext context) {
-    const iconColor = CupertinoColors.white;
-    const titleColor = CupertinoColors.white;
-    final subtitleColor = CupertinoColors.systemGrey4;
+    final isDark = CupertinoTheme.brightnessOf(context) == Brightness.dark;
+    final iconColor = isDark ? CupertinoColors.white : CupertinoColors.black;
+    final titleColor = isDark ? CupertinoColors.white : CupertinoColors.black;
+    final subtitleColor = CupertinoColors.systemGrey;
 
     return Padding(
       padding: const EdgeInsets.all(12.0),
@@ -64,10 +69,13 @@ class AdaptiveSongCard extends StatelessWidget {
             width: 48,
             height: 48,
             decoration: BoxDecoration(
-              color: CupertinoColors.systemGrey6.withOpacity(0.3),
+              color: CupertinoColors.systemGrey6.withValues(alpha: 0.3),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: const Icon(CupertinoIcons.music_note_2, color: iconColor),
+            child: CNIcon(
+              symbol: const CNSymbol('music.note'),
+              color: iconColor,
+            ),
           ),
           const SizedBox(width: 16),
           Expanded(
@@ -77,7 +85,7 @@ class AdaptiveSongCard extends StatelessWidget {
               children: [
                 Text(
                   title,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 16,
                     color: titleColor,
@@ -104,7 +112,9 @@ class AdaptiveSongCard extends StatelessWidget {
                           vertical: 2,
                         ),
                         decoration: BoxDecoration(
-                          color: CupertinoColors.systemGrey.withOpacity(0.5),
+                          color: CupertinoColors.systemGrey.withValues(
+                            alpha: 0.5,
+                          ),
                           borderRadius: BorderRadius.circular(4),
                         ),
                         child: Text(
@@ -122,8 +132,8 @@ class AdaptiveSongCard extends StatelessWidget {
               ],
             ),
           ),
-          const Icon(
-            CupertinoIcons.chevron_right,
+          const CNIcon(
+            symbol: CNSymbol('chevron.right'),
             color: CupertinoColors.systemGrey,
           ),
         ],
@@ -141,7 +151,9 @@ class AdaptiveSongCard extends StatelessWidget {
             width: 48,
             height: 48,
             decoration: BoxDecoration(
-              color: theme.colorScheme.secondaryContainer.withOpacity(0.8),
+              color: theme.colorScheme.secondaryContainer.withValues(
+                alpha: 0.8,
+              ),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Icon(

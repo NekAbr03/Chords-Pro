@@ -34,7 +34,7 @@ class LyricsRenderArea extends StatefulWidget {
 }
 
 class _LyricsRenderAreaState extends State<LyricsRenderArea> {
-  bool _showRomaji = false;
+  final bool _showRomaji = false;
   final bool _showChords = true;
   List<SongLine> _parsedLines = [];
   bool _isLoading = true;
@@ -295,7 +295,7 @@ class _LyricsRenderAreaState extends State<LyricsRenderArea> {
                       borderRadius: BorderRadius.circular(50),
                       border: Border.all(
                         // ignore: deprecated_member_use
-                        color: theme.colorScheme.outline.withOpacity(0.2),
+                        color: theme.colorScheme.outline.withValues(alpha: 0.2),
                       ),
                     ),
                     child: Row(

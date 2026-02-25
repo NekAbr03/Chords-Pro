@@ -8,6 +8,7 @@ import '../utils/music_theory.dart';
 import '../models/song_models.dart';
 import '../widgets/lyrics_render_area.dart';
 import '../widgets/guitar_chord_widget.dart';
+import 'package:cupertino_native/cupertino_native.dart';
 
 class SongViewScreen extends StatefulWidget {
   final String title;
@@ -133,18 +134,26 @@ class _SongViewScreenState extends State<SongViewScreen> {
 
   // --- IOS LAYOUT ---
   Widget _buildIOSLayout(BuildContext context) {
+    final isDark = CupertinoTheme.brightnessOf(context) == Brightness.dark;
+    final bgColor = isDark
+        ? CupertinoColors.black
+        : CupertinoColors.systemBackground;
     final screenHeight = MediaQuery.of(context).size.height;
     final adaptiveHeight = (screenHeight * 0.25).clamp(140.0, 180.0);
 
     return CupertinoPageScaffold(
-      backgroundColor: Colors.transparent, // Glass effect
+      backgroundColor: bgColor,
       navigationBar: CupertinoNavigationBar(
-        backgroundColor: Colors.transparent,
+        backgroundColor: bgColor.withValues(alpha: 0.9),
         middle: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
             Text(
               widget.title,
-              style: const TextStyle(fontWeight: FontWeight.bold),
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: isDark ? CupertinoColors.white : CupertinoColors.black,
+              ),
             ),
             Text(
               widget.artist,
@@ -157,22 +166,89 @@ class _SongViewScreenState extends State<SongViewScreen> {
         ),
         trailing: CupertinoButton(
           padding: EdgeInsets.zero,
-          child: Icon(
-            _isFavorite ? CupertinoIcons.heart_fill : CupertinoIcons.heart,
+          onPressed: _toggleFavorite,
+          child: CNIcon(
+            symbol: _isFavorite
+                ? const CNSymbol('heart.fill')
+                : const CNSymbol('heart'),
             color: _isFavorite
                 ? CupertinoColors.systemRed
-                : CupertinoColors.label,
+                : (isDark ? CupertinoColors.white : CupertinoColors.black),
           ),
-          onPressed: _toggleFavorite,
         ),
       ),
-      child: SafeArea(
-        bottom: false,
-        child: _buildSharedBody(
-          context,
-          adaptiveHeight: adaptiveHeight,
-          isIOS: true,
-        ),
+      child: Stack(
+        children: [
+          // Body logic
+          _buildSharedBody(
+            bottomPadding: _isPanelExpanded
+                ? adaptiveHeight + 20
+                : _panelCollapsedSize + 20,
+            contentBackgroundColor: bgColor,
+          ),
+
+          // Chord Panel (Native Cupertino Style - No Glass)
+          Align(
+            alignment: _isPanelExpanded
+                ? Alignment.bottomCenter
+                : Alignment.bottomRight,
+            child: GestureDetector(
+              onVerticalDragUpdate: _onPanelDragUpdate,
+              onTap: _isPanelExpanded ? null : _togglePanel,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeOutCubic,
+                width: _isPanelExpanded
+                    ? MediaQuery.of(context).size.width
+                    : _panelCollapsedSize,
+                height: _isPanelExpanded ? adaptiveHeight : _panelCollapsedSize,
+                margin: EdgeInsets.only(
+                  right: _isPanelExpanded ? 0 : _panelMarginCollapsed,
+                  bottom: _isPanelExpanded ? 0 : _panelMarginCollapsed,
+                ),
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? CupertinoColors.systemGrey6
+                      : CupertinoColors.systemGrey5,
+                  borderRadius: _isPanelExpanded
+                      ? const BorderRadius.vertical(top: Radius.circular(20))
+                      : BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: CupertinoColors.black.withValues(alpha: 0.1),
+                      blurRadius: 10,
+                      offset: const Offset(0, -2),
+                    ),
+                  ],
+                ),
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    Offstage(
+                      offstage: !_isPanelExpanded,
+                      child: _buildExpandedPanel(
+                        context,
+                        isIOS: true,
+                        textColor: isDark
+                            ? CupertinoColors.white
+                            : CupertinoColors.black,
+                      ),
+                    ),
+                    Visibility(
+                      visible: !_isPanelExpanded,
+                      child: CNIcon(
+                        symbol: const CNSymbol('music.note.list'),
+                        color: isDark
+                            ? CupertinoColors.white
+                            : CupertinoColors.black,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -213,106 +289,33 @@ class _SongViewScreenState extends State<SongViewScreen> {
         ],
       ),
       body: _buildSharedBody(
-        context,
-        adaptiveHeight: adaptiveHeight,
-        isIOS: false,
+        bottomPadding: _isPanelExpanded ? adaptiveHeight + 10 : 80,
+        contentBackgroundColor: contentBg,
       ),
     );
   }
 
   // --- SHARED BODY ---
-  Widget _buildSharedBody(
-    BuildContext context, {
-    required double adaptiveHeight,
-    required bool isIOS,
+  Widget _buildSharedBody({
+    required double bottomPadding,
+    required Color contentBackgroundColor,
   }) {
-    final screenWidth = MediaQuery.of(context).size.width;
-    // Определяем тему для панели аккордов
-    final panelColor = isIOS
-        ? CupertinoColors.systemGrey6.withOpacity(0.9)
-        : Theme.of(context).colorScheme.secondaryContainer;
-
-    final panelIconColor = isIOS
-        ? CupertinoColors.label
-        : Theme.of(context).colorScheme.onSecondaryContainer;
-
-    return Stack(
-      children: [
-        Positioned.fill(
-          child: LyricsRenderArea(
-            url: widget.url,
-            transposeLevel: _transposeLevel,
-            bottomPadding: _isPanelExpanded ? adaptiveHeight + 10 : 80,
-            onTransposeChange: (newLevel) =>
-                setState(() => _transposeLevel = newLevel),
-            onChordsLoaded: (chords) {
-              if (!listEquals(_rawUniqueChords, chords)) {
-                if (mounted) {
-                  setState(() => _rawUniqueChords = chords);
-                }
-              }
-            },
-            onChordTap: _onChordTapInternal,
-          ),
-        ),
-        Align(
-          alignment: _isPanelExpanded
-              ? Alignment.bottomCenter
-              : Alignment.bottomRight,
-          child: GestureDetector(
-            onVerticalDragUpdate: _onPanelDragUpdate,
-            onTap: _isPanelExpanded ? null : _togglePanel,
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 300),
-              curve: Curves.easeOutCubic,
-              width: _isPanelExpanded ? screenWidth : _panelCollapsedSize,
-              height: _isPanelExpanded ? adaptiveHeight : _panelCollapsedSize,
-              margin: EdgeInsets.only(
-                right: _isPanelExpanded ? 0 : _panelMarginCollapsed,
-                bottom: _isPanelExpanded ? 0 : _panelMarginCollapsed,
-              ),
-              decoration: BoxDecoration(
-                color: panelColor,
-                borderRadius: _isPanelExpanded
-                    ? const BorderRadius.vertical(top: Radius.circular(24))
-                    : BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.15),
-                    blurRadius: 8,
-                    offset: const Offset(0, -2),
-                  ),
-                ],
-              ),
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  Offstage(
-                    offstage: !_isPanelExpanded,
-                    child: _buildExpandedPanel(
-                      context, // Передаем context
-                      isIOS: isIOS,
-                      textColor: panelIconColor, // Reusing icon color for text
-                    ),
-                  ),
-                  Visibility(
-                    visible: !_isPanelExpanded,
-                    child: Center(
-                      child: Icon(
-                        isIOS
-                            ? CupertinoIcons.music_note_2
-                            : Icons.music_note_outlined,
-                        size: 28,
-                        color: panelIconColor,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ],
+    return Positioned.fill(
+      child: LyricsRenderArea(
+        url: widget.url,
+        transposeLevel: _transposeLevel,
+        bottomPadding: bottomPadding,
+        onTransposeChange: (newLevel) =>
+            setState(() => _transposeLevel = newLevel),
+        onChordsLoaded: (chords) {
+          if (!listEquals(_rawUniqueChords, chords)) {
+            if (mounted) {
+              setState(() => _rawUniqueChords = chords);
+            }
+          }
+        },
+        onChordTap: _onChordTapInternal,
+      ),
     );
   }
 
@@ -323,10 +326,11 @@ class _SongViewScreenState extends State<SongViewScreen> {
     required bool isIOS,
     Color? textColor,
   }) {
+    final theme = Theme.of(context);
     // Стиль текста
     final textStyle = isIOS
         ? const TextStyle(fontSize: 14, color: CupertinoColors.label)
-        : Theme.of(context).textTheme.bodyMedium;
+        : theme.textTheme.bodyMedium;
 
     return Column(
       children: [
@@ -338,10 +342,10 @@ class _SongViewScreenState extends State<SongViewScreen> {
             height: 4,
             decoration: BoxDecoration(
               color: isIOS
-                  ? CupertinoColors.systemGrey.withOpacity(0.5)
+                  ? CupertinoColors.systemGrey.withValues(alpha: 0.5)
                   : Theme.of(
                       context,
-                    ).colorScheme.onSurfaceVariant.withOpacity(0.4),
+                    ).colorScheme.onSurfaceVariant.withValues(alpha: 0.4),
               borderRadius: BorderRadius.circular(2),
             ),
           ),
@@ -358,7 +362,7 @@ class _SongViewScreenState extends State<SongViewScreen> {
                     controller: _chordScrollController,
                     scrollDirection: Axis.horizontal,
                     itemCount: _rawUniqueChords.length,
-                    separatorBuilder: (_, __) => const SizedBox(width: 12),
+                    separatorBuilder: (_, _) => const SizedBox(width: 12),
                     itemBuilder: (context, index) {
                       final rawName = _rawUniqueChords[index];
                       final displayName = MusicTheory.transposeChord(
@@ -372,13 +376,12 @@ class _SongViewScreenState extends State<SongViewScreen> {
                           padding: const EdgeInsets.all(6),
                           decoration: BoxDecoration(
                             color: isIOS
-                                ? CupertinoColors.systemBackground.withOpacity(
-                                    0.1,
+                                ? CupertinoColors.systemBackground.withValues(
+                                    alpha: 0.1,
                                   )
-                                : Theme.of(context).brightness ==
-                                      Brightness.dark
-                                ? Colors.white.withOpacity(0.08)
-                                : Colors.black.withOpacity(0.08),
+                                : theme.brightness == Brightness.dark
+                                ? Colors.white.withValues(alpha: 0.08)
+                                : Colors.black.withValues(alpha: 0.08),
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: GuitarChordWidget(

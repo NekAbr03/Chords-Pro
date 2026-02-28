@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart'; // Для kIsWeb
+import 'package:cupertino_native/cupertino_native.dart';
 
 import '../config/app_config.dart';
 import '../services/cache_service.dart';
@@ -68,12 +69,31 @@ class _HomeTabState extends State<HomeTab> {
       if (mounted) {
         if (_topSongs.isNotEmpty) {
           // Кэш есть - работаем оффлайн
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text("Работаем оффлайн. Показаны сохраненные данные."),
-              duration: Duration(seconds: 3),
-            ),
-          );
+          if (!kIsWeb && Platform.isIOS) {
+            showCupertinoDialog(
+              context: context,
+              barrierDismissible: true,
+              builder: (ctx) => CupertinoAlertDialog(
+                title: const Text("Автономный режим"),
+                content: const Text(
+                  "Показаны сохраненные данные. Проверьте интернет.",
+                ),
+                actions: [
+                  CupertinoDialogAction(
+                    child: const Text("OK"),
+                    onPressed: () => Navigator.pop(ctx),
+                  ),
+                ],
+              ),
+            );
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text("Работаем оффлайн. Показаны сохраненные данные."),
+                duration: Duration(seconds: 3),
+              ),
+            );
+          }
           // Выключаем лоадер, так как запрос завершен (хоть и ошибкой)
           setState(() => _isLoading = false);
         } else {
@@ -132,18 +152,18 @@ class _HomeTabState extends State<HomeTab> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(
-                CupertinoIcons.exclamationmark_circle,
-                size: 64,
+              const CNIcon(
+                symbol: CNSymbol('exclamationmark.triangle'),
                 color: CupertinoColors.systemRed,
               ),
               const SizedBox(height: 16),
-              Text(_errorMessage!, textAlign: TextAlign.center),
-              const SizedBox(height: 24),
-              CupertinoButton.filled(
-                onPressed: _loadData,
-                child: const Text("Попробовать снова"),
+              Text(
+                _errorMessage!,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: CupertinoColors.label),
               ),
+              const SizedBox(height: 24),
+              CNButton(onPressed: _loadData, label: "Попробовать снова"),
             ],
           ),
         ),

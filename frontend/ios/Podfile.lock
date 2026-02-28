@@ -1,0 +1,29 @@
+PODS:
+  - cupertino_native (0.0.1):
+    - Flutter
+  - Flutter (1.0.0)
+  - shared_preferences_foundation (0.0.1):
+    - Flutter
+    - FlutterMacOS
+
+DEPENDENCIES:
+  - cupertino_native (from `.symlinks/plugins/cupertino_native/ios`)
+  - Flutter (from `Flutter`)
+  - shared_preferences_foundation (from `.symlinks/plugins/shared_preferences_foundation/darwin`)
+
+EXTERNAL SOURCES:
+  cupertino_native:
+    :path: ".symlinks/plugins/cupertino_native/ios"
+  Flutter:
+    :path: Flutter
+  shared_preferences_foundation:
+    :path: ".symlinks/plugins/shared_preferences_foundation/darwin"
+
+SPEC CHECKSUMS:
+  cupertino_native: 1db0611c94f9a9ea28433ed16a344dcb996370b5
+  Flutter: cabc95a1d2626b1b06e7179b784ebcf0c0cde467
+  shared_preferences_foundation: 7036424c3d8ec98dfe75ff1667cb0cd531ec82bb
+
+PODFILE CHECKSUM: a2796ae4d25a78543c3a71ff68e8cd4761c26922
+
+COCOAPODS: 1.16.2

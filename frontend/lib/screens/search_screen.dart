@@ -4,6 +4,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:cupertino_native/cupertino_native.dart';
 
 import '../config/app_config.dart';
 import '../services/cache_service.dart'; // Не забудь импорт
@@ -365,8 +366,8 @@ class _SearchScreenState extends State<SearchScreen> {
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       child: Row(
                         children: [
-                          const Icon(
-                            CupertinoIcons.time,
+                          const CNIcon(
+                            symbol: CNSymbol('clock'),
                             color: CupertinoColors.systemGrey,
                           ),
                           const SizedBox(width: 12),
@@ -382,8 +383,8 @@ class _SearchScreenState extends State<SearchScreen> {
                           CupertinoButton(
                             padding: EdgeInsets.zero,
                             minimumSize: Size.zero,
-                            child: const Icon(
-                              CupertinoIcons.clear_circled,
+                            child: const CNIcon(
+                              symbol: CNSymbol('xmark.circle.fill'),
                               color: CupertinoColors.systemGrey,
                             ),
                             onPressed: () => _removeFromHistory(historyItem),

@@ -164,13 +164,10 @@ class _SongViewScreenState extends State<SongViewScreen> {
             ),
           ],
         ),
-        trailing: CupertinoButton(
-          padding: EdgeInsets.zero,
+        trailing: CNButton.icon(
           onPressed: _toggleFavorite,
-          child: CNIcon(
-            symbol: _isFavorite
-                ? const CNSymbol('heart.fill')
-                : const CNSymbol('heart'),
+          icon: CNSymbol(
+            _isFavorite ? 'heart.fill' : 'heart',
             color: _isFavorite
                 ? CupertinoColors.systemRed
                 : (isDark ? CupertinoColors.white : CupertinoColors.black),

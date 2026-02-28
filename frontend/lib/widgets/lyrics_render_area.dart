@@ -5,6 +5,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:cupertino_native/cupertino_native.dart';
 
 import '../config/app_config.dart';
 import '../models/song_models.dart';
@@ -213,6 +214,35 @@ class _LyricsRenderAreaState extends State<LyricsRenderArea> {
     // Показываем загрузку только если данных нет совсем
     if (_isLoading && _parsedLines.isEmpty) {
       if (_isSlowLoading) {
+        if (!kIsWeb && Platform.isIOS) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const CupertinoActivityIndicator(radius: 14),
+                const SizedBox(height: 24),
+                const Text(
+                  'Сервер просыпается...',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 17,
+                    color: CupertinoColors.label,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Это может занять до 50 секунд',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: CupertinoColors.secondaryLabel,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          );
+        }
         return Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -236,11 +266,36 @@ class _LyricsRenderAreaState extends State<LyricsRenderArea> {
           ),
         );
       }
-      return const Center(child: CircularProgressIndicator());
+      return Center(
+        child: !kIsWeb && Platform.isIOS
+            ? const CupertinoActivityIndicator(radius: 14)
+            : const CircularProgressIndicator(),
+      );
     }
 
     // Показываем ошибку только если данных нет совсем
     if (_isError && _parsedLines.isEmpty) {
+      if (!kIsWeb && Platform.isIOS) {
+        return Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const CNIcon(
+                symbol: CNSymbol('exclamationmark.triangle'),
+                color: CupertinoColors.systemRed,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                _errorMessage ?? 'Ошибка загрузки',
+                style: const TextStyle(color: CupertinoColors.label),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
+              CNButton(label: 'Повторить', onPressed: _loadData),
+            ],
+          ),
+        );
+      }
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -291,21 +346,29 @@ class _LyricsRenderAreaState extends State<LyricsRenderArea> {
                       vertical: 6,
                     ),
                     decoration: BoxDecoration(
-                      color: theme.colorScheme.surfaceContainerHighest,
+                      color: !kIsWeb && Platform.isIOS
+                          ? CupertinoColors.separator
+                          : theme.colorScheme.surfaceContainerHighest,
                       borderRadius: BorderRadius.circular(50),
                       border: Border.all(
-                        // ignore: deprecated_member_use
-                        color: theme.colorScheme.outline.withValues(alpha: 0.2),
+                        color: !kIsWeb && Platform.isIOS
+                            ? CupertinoColors.transparent
+                            : theme.colorScheme.outline.withValues(alpha: 0.2),
                       ),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        InkWell(
+                        GestureDetector(
                           onTap: () => widget.onTransposeChange?.call(
                             widget.transposeLevel - 1,
                           ),
-                          child: const Icon(Icons.remove, size: 20),
+                          child: (!kIsWeb && Platform.isIOS)
+                              ? const CNIcon(
+                                  symbol: CNSymbol('minus'),
+                                  size: 18,
+                                )
+                              : const Icon(Icons.remove, size: 20),
                         ),
                         Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -316,14 +379,19 @@ class _LyricsRenderAreaState extends State<LyricsRenderArea> {
                             style: GoogleFonts.roboto(
                               fontWeight: FontWeight.bold,
                               fontSize: 16,
+                              color: (!kIsWeb && Platform.isIOS)
+                                  ? CupertinoColors.label
+                                  : null,
                             ),
                           ),
                         ),
-                        InkWell(
+                        GestureDetector(
                           onTap: () => widget.onTransposeChange?.call(
                             widget.transposeLevel + 1,
                           ),
-                          child: const Icon(Icons.add, size: 20),
+                          child: (!kIsWeb && Platform.isIOS)
+                              ? const CNIcon(symbol: CNSymbol('plus'), size: 18)
+                              : const Icon(Icons.add, size: 20),
                         ),
                       ],
                     ),

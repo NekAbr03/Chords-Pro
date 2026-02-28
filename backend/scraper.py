@@ -257,10 +257,14 @@ class Scraper:
                 if not isinstance(item, dict): continue
                 
                 item_type = item.get('type')
-                valid_types = ['Chords', 'Tab']
-                is_official = item.get('marketing_type') == 'official'
+                marketing_type = item.get('marketing_type')
                 
-                if item_type in valid_types or is_official:
+                # Исключаем платные/официальные версии
+                if marketing_type in ['official', 'TabPro'] or item_type in ['Official', 'Pro']:
+                    continue
+                
+                # Оставляем только Chords и Tab
+                if item_type in ['Chords', 'Tab']:
                     output.append({
                         "title": item.get('song_name'),
                         "artist": item.get('artist_name'),
@@ -300,7 +304,15 @@ class Scraper:
 
             for item in tabs:
                 if not isinstance(item, dict): continue
-                if item.get('type') == 'Chords' or item.get('marketing_type') == 'official':
+                
+                item_type = item.get('type')
+                marketing_type = item.get('marketing_type')
+                
+                # Исключаем платные/официальные версии
+                if marketing_type in ['official', 'TabPro'] or item_type in ['Official', 'Pro']:
+                    continue
+
+                if item_type == 'Chords':
                     output.append({
                         "title": item.get('song_name'),
                         "artist": item.get('artist_name'),

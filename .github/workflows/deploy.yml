@@ -3,14 +3,12 @@ name: Build and Push Backend Docker Image
 on:
   push:
     branches: [ "main" ]
-    # Запускаем сборку только при изменениях в папке бэкенда
+    # Сборка триггерится только при изменениях в бэкенде
     paths:
       - 'backend/**'
 
 env:
   REGISTRY: ghcr.io
-  # Этот хак автоматически переведет "NekAbr03/Chords-Pro" в "nekabr03/chords-pro"
-  IMAGE_NAME: ${{ github.repository }}
 
 jobs:
   build-and-push:
@@ -22,6 +20,11 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      # Автоматически переводим имя репозитория в нижний регистр для Docker Hub / GHCR
+      - name: Downcase REPO name
+        run: |
+          echo "IMAGE_NAME=${GITHUB_REPOSITORY,,}-backend" >> $GITHUB_ENV
 
       - name: Set up Docker Buildx
         uses: actions/buildx-action@v3
@@ -49,10 +52,7 @@ jobs:
           context: ./backend
           file: ./backend/Dockerfile
           push: true
-          # Используем функцию превращения тегов в нижний регистр
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-
-          

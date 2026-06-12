@@ -1,21 +1,30 @@
+# Используем стабильный slim-образ
 FROM python:3.11-slim
 
-# Устанавливаем системные зависимости, необходимые для сборки некоторых библиотек
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    && rm -rf /var/lib/apt/lists/*
+# Выставляем переменные окружения, чтобы Python не буферизировал логи
+# и не плодил мусорные .pyc файлы
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PORT=5000
 
 WORKDIR /app
 
-# Копируем и устанавливаем зависимости
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Устанавливаем системные зависимости, которые могут понадобиться для curl_cffi
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
 
-# Копируем весь остальной код
+# Копируем и устанавливаем зависимости Python
+COPY requirements.txt .
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
+
+# Копируем остальной код приложения
 COPY . .
 
-# Открываем порт, на котором будет работать FastAPI внутри контейнера
-EXPOSE 5000
+# Открываем порт наружу
+EXPOSE ${PORT}
 
-# Запускаем uvicorn
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "5000"]
+# Запускаем через Production-ready сервер Gunicorn с Uvicorn-воркерами
+CMD gunicorn main:app --workers 4 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:${PORT}

@@ -23,7 +23,7 @@ RUN pip install --no-cache-dir --upgrade pip && \
 # Копируем остальной код приложения
 COPY . .
 
-# Открываем порт наружу
+# Открываем порт наружужужу
 EXPOSE ${PORT}
 
 # Запускаем через Production-ready сервер Gunicorn с Uvicorn-воркерами

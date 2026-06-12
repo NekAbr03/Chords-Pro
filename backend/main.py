@@ -10,7 +10,7 @@ from scraper import Scraper
 
 app = FastAPI(title="Nano Chords Scraper API (Final)")
 
-# Этот коммент здесь нужен для деплоя
+# Этот коммент больше не нужен для деплоя
 
 app.add_middleware(
     CORSMiddleware,

@@ -5,7 +5,7 @@ import 'package:http/http.dart' as http;
 class AppConfig {
   // Хардкод IP убран, оставлен только продакшн URL
   static String get baseUrl {
-    return 'https://chords-pro.onrender.com';
+    return 'http://72.35.242.64:5000';
   }
 
   /// Выполняет GET запрос с автоматическими повторными попытками
